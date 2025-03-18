@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![GitHub stars](https://img.shields.io/github/stars/nexus-automation/n8n-ai-workflow-hub?style=social)](https://github.com/nexus-automation/n8n-ai-workflow-hub/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/nexus-automation/n8n-ai-workflow-hub?style=social)](https://github.com/nexus-automation/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/nexus-automation/n8n-ai-workflow-hub?style=social)](https://github.com/nexus-automation/n8n-ai-workflow-hub/network/members)
 [![n8n Version](https://img.shields.io/badge/n8n-v1.5.0+-00b5a1.svg)](https://github.com/n8n-io/n8n)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
