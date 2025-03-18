@@ -1,0 +1,379 @@
+import {
+  IExecuteFunctions,
+  INodeExecutionData,
+  INodeType,
+  INodeTypeDescription,
+  NodeOperationError,
+} from 'n8n-workflow';
+
+import puppeteer, { Browser, Page } from 'puppeteer';
+import puppeteerExtra from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import AdblockerPlugin from 'puppeteer-extra-plugin-adblocker';
+import * as cheerio from 'cheerio';
+import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+
+/**
+ * Advanced Web Scraper Node for n8n with enhanced anti-detection, navigation,
+ * and data extraction capabilities
+ */
+export class WebScraper implements INodeType {
+  description: INodeTypeDescription = {
+    displayName: 'Web Scraper',
+    name: 'webScraper',
+    group: ['input'],
+    version: 1,
+    subtitle: '={{$parameter["operation"]}}',
+    description: 'Advanced web scraping with browser automation and pattern extraction',
+    defaults: {
+      name: 'Web Scraper',
+    },
+    inputs: ['main'],
+    outputs: ['main'],
+    properties: [
+      // Operation Selection
+      {
+        displayName: 'Operation',
+        name: 'operation',
+        type: 'options',
+        noDataExpression: true,
+        options: [
+          {
+            name: 'Scrape Page',
+            value: 'scrapePage',
+            description: 'Extract data from a web page using selectors',
+            action: 'Extract data from a web page using selectors',
+          },
+          {
+            name: 'Scrape Table',
+            value: 'scrapeTable',
+            description: 'Extract tabular data from a web page',
+            action: 'Extract tabular data from a web page',
+          },
+          {
+            name: 'Capture Screenshot',
+            value: 'screenshot',
+            description: 'Take a screenshot of a web page',
+            action: 'Take a screenshot of a web page',
+          },
+          {
+            name: 'Generate PDF',
+            value: 'pdf',
+            description: 'Generate a PDF from a web page',
+            action: 'Generate a PDF from a web page',
+          },
+          {
+            name: 'Extract Pagination Data',
+            value: 'pagination',
+            description: 'Extract data across multiple paginated pages',
+            action: 'Extract data across multiple paginated pages',
+          },
+          {
+            name: 'Execute Custom Script',
+            value: 'executeScript',
+            description: 'Execute custom JavaScript on the page',
+            action: 'Execute custom JavaScript on the page',
+          },
+        ],
+        default: 'scrapePage',
+      },
+      
+      // URL Configuration
+      {
+        displayName: 'URL',
+        name: 'url',
+        type: 'string',
+        default: '',
+        required: true,
+        description: 'The URL of the web page to scrape',
+      },
+      
+      // Authentication (when needed)
+      {
+        displayName: 'Authentication',
+        name: 'authentication',
+        type: 'collection',
+        placeholder: 'Add Authentication',
+        default: {},
+        options: [
+          {
+            displayName: 'Login Required',
+            name: 'loginRequired',
+            type: 'boolean',
+            default: false,
+            description: 'Whether login is required before scraping',
+          },
+          {
+            displayName: 'Login URL',
+            name: 'loginUrl',
+            type: 'string',
+            displayOptions: {
+              show: {
+                loginRequired: [
+                  true,
+                ],
+              },
+            },
+            default: '',
+            description: 'The URL of the login page',
+          },
+          {
+            displayName: 'Username Selector',
+            name: 'usernameSelector',
+            type: 'string',
+            displayOptions: {
+              show: {
+                loginRequired: [
+                  true,
+                ],
+              },
+            },
+            default: '',
+            placeholder: '#username',
+            description: 'CSS selector for the username field',
+          },
+          {
+            displayName: 'Password Selector',
+            name: 'passwordSelector',
+            type: 'string',
+            displayOptions: {
+              show: {
+                loginRequired: [
+                  true,
+                ],
+              },
+            },
+            default: '',
+            placeholder: '#password',
+            description: 'CSS selector for the password field',
+          },
+          {
+            displayName: 'Submit Button Selector',
+            name: 'submitSelector',
+            type: 'string',
+            displayOptions: {
+              show: {
+                loginRequired: [
+                  true,
+                ],
+              },
+            },
+            default: '',
+            placeholder: 'button[type="submit"]',
+            description: 'CSS selector for the login submit button',
+          },
+          {
+            displayName: 'Username',
+            name: 'username',
+            type: 'string',
+            displayOptions: {
+              show: {
+                loginRequired: [
+                  true,
+                ],
+              },
+            },
+            default: '',
+            description: 'The username for login',
+            typeOptions: {
+              password: true,
+            },
+          },
+          {
+            displayName: 'Password',
+            name: 'password',
+            type: 'string',
+            displayOptions: {
+              show: {
+                loginRequired: [
+                  true,
+                ],
+              },
+            },
+            default: '',
+            description: 'The password for login',
+            typeOptions: {
+              password: true,
+            },
+          },
+        ],
+      },
+      
+      // Scrape Page Configuration
+      {
+        displayName: 'Selectors',
+        name: 'selectors',
+        placeholder: 'Add Selector',
+        type: 'fixedCollection',
+        typeOptions: {
+          multipleValues: true,
+        },
+        displayOptions: {
+          show: {
+            operation: [
+              'scrapePage',
+            ],
+          },
+        },
+        default: {},
+        options: [
+          {
+            name: 'values',
+            displayName: 'Values',
+            values: [
+              {
+                displayName: 'Field Name',
+                name: 'fieldName',
+                type: 'string',
+                default: '',
+                description: 'Name of the field to extract',
+                placeholder: 'e.g. title',
+                required: true,
+              },
+              {
+                displayName: 'Selector',
+                name: 'selector',
+                type: 'string',
+                default: '',
+                description: 'CSS selector of the element to extract',
+                placeholder: 'e.g. h1.title',
+                required: true,
+              },
+              {
+                displayName: 'Extraction Type',
+                name: 'extractionType',
+                type: 'options',
+                options: [
+                  {
+                    name: 'Text',
+                    value: 'text',
+                    description: 'Extract the text content of the element',
+                  },
+                  {
+                    name: 'HTML',
+                    value: 'html',
+                    description: 'Extract the HTML content of the element',
+                  },
+                  {
+                    name: 'Attribute',
+                    value: 'attribute',
+                    description: 'Extract the value of a specific attribute',
+                  },
+                ],
+                default: 'text',
+                description: 'What to extract from the selected element',
+              },
+              {
+                displayName: 'Attribute Name',
+                name: 'attributeName',
+                type: 'string',
+                displayOptions: {
+                  show: {
+                    extractionType: [
+                      'attribute',
+                    ],
+                  },
+                },
+                default: '',
+                placeholder: 'e.g. href',
+                description: 'The name of the attribute to extract',
+              },
+              {
+                displayName: 'Multiple',
+                name: 'multiple',
+                type: 'boolean',
+                default: false,
+                description: 'Whether to extract multiple elements matching the selector',
+              },
+            ],
+          },
+        ],
+        description: 'Selectors for data extraction',
+      },
+      
+      // Scrape Table Configuration
+      {
+        displayName: 'Table Selector',
+        name: 'tableSelector',
+        type: 'string',
+        displayOptions: {
+          show: {
+            operation: [
+              'scrapeTable',
+            ],
+          },
+        },
+        default: 'table',
+        placeholder: 'table.data-table',
+        description: 'CSS selector for the table to extract',
+        required: true,
+      },
+      {
+        displayName: 'Extract Headers From',
+        name: 'extractHeadersFrom',
+        type: 'options',
+        displayOptions: {
+          show: {
+            operation: [
+              'scrapeTable',
+            ],
+          },
+        },
+        options: [
+          {
+            name: 'First Row (thead or first tr)',
+            value: 'firstRow',
+            description: 'Extract headers from the first row of the table',
+          },
+          {
+            name: 'Custom Selectors',
+            value: 'customSelectors',
+            description: 'Define custom selectors for headers',
+          },
+          {
+            name: 'Manual Headers',
+            value: 'manualHeaders',
+            description: 'Manually define the headers',
+          },
+          {
+            name: 'No Headers',
+            value: 'noHeaders',
+            description: 'Do not extract headers, use column1, column2, etc.',
+          },
+        ],
+        default: 'firstRow',
+        description: 'Where to extract the table headers from',
+      },
+      {
+        displayName: 'Header Selectors',
+        name: 'headerSelectors',
+        type: 'string',
+        displayOptions: {
+          show: {
+            operation: [
+              'scrapeTable',
+            ],
+            extractHeadersFrom: [
+              'customSelectors',
+            ],
+          },
+        },
+        default: 'th, thead td',
+        description: 'CSS selector for the table headers',
+      },
+      {
+        displayName: 'Headers',
+        name: 'manualHeaders',
+        placeholder: 'Add Header',
+        type: 'fixedCollection',
+        typeOptions: {
+          multipleValues: true,
+        },
+        displayOptions: {
+          show: {
+            operation: [
+              'scrapeTable',
+            ],

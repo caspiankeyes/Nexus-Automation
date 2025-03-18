@@ -1,0 +1,381 @@
+{
+  "name": "AI-Powered Twitter Content Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "minutesInterval": 360
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "id": "ec7145f1-3d5b-4352-a15d-201cdf8e8a9b"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Define industry topics to generate content for\nconst industries = [\n  \"artificial intelligence\",\n  \"automation workflows\",\n  \"no-code development\",\n  \"business process optimization\",\n  \"digital transformation\"\n];\n\n// Randomly select an industry for this run\nconst selectedIndustry = industries[Math.floor(Math.random() * industries.length)];\n\n// Get audience analytics data (in a real implementation, this could come from an API)\nconst audienceAnalytics = {\n  activeHours: [9, 12, 17, 20],  // Hours with highest engagement\n  timezone: \"America/New_York\",  // Primary audience timezone\n  topics: [\"ai\", \"automation\", \"productivity\", \"technology\"],\n  engagement: {\n    images: 0.82,  // Posts with images get 82% more engagement\n    links: 0.65,   // Posts with links get 65% more engagement\n    hashtags: {    // Optimal number of hashtags\n      min: 2,\n      max: 5\n    }\n  }\n};\n\n// Return the data\nreturn {\n  json: {\n    industry: selectedIndustry,\n    audienceAnalytics: audienceAnalytics,\n    timezone: audienceAnalytics.timezone,\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "name": "Industry & Audience Setup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ],
+      "id": "0c4f6dcc-87d9-41f5-9023-fd7179f79fe0"
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "model": "gpt-4",
+        "promptType": "dynamic",
+        "prompt": "=Generate 5 trending topics about {{$node[\"Industry & Audience Setup\"].json[\"industry\"]}} for content creation. Each topic should be innovative and engage a professional audience interested in productivity and business efficiency.\n\nFormat the response as a valid JSON array of strings, with each element being a potential topic. Do not include any explanations or text outside of the JSON array.",
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 500,
+          "presencePenalty": 0.1,
+          "frequencyPenalty": 0.3
+        },
+        "additionalOptions": {
+          "responseFormat": "json_object"
+        }
+      },
+      "name": "Topic Generator",
+      "type": "nexus-nodes.openai",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ],
+      "id": "b42c8adc-6f2e-46a8-b91d-7d2bb10ac54c"
+    },
+    {
+      "parameters": {
+        "mode": "combinePrevious",
+        "combinePreviousFields": {
+          "value": "={{$node[\"Topic Generator\"].json[\"choices\"][0][\"message\"][\"content\"]}}"
+        },
+        "options": {}
+      },
+      "name": "Parse Topics",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ],
+      "id": "4b68d3b9-9f3d-4fd3-ad80-9a8d7fab1bec"
+    },
+    {
+      "parameters": {
+        "operation": "chat",
+        "model": "gpt-4",
+        "messages": {
+          "values": [
+            {
+              "type": "selectOption",
+              "messageType": "system",
+              "message": "You are a social media content creator specialized in professional, engaging content for Twitter/X. Your posts are insightful, use appropriate emojis, and include relevant hashtags."
+            },
+            {
+              "type": "selectOption",
+              "messageType": "user",
+              "message": "=Create a Twitter post about this topic: {{$json[\"item\"]}}\n\nThe post should be:\n1. Under 280 characters\n2. Include 2-3 relevant hashtags\n3. Use 1-2 appropriate emojis\n4. Be professional but conversational in tone\n5. Include a thought-provoking question or call-to-action\n\nDo not include quotation marks around the post. Just output the text of the post itself."
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "name": "Content Creation",
+      "type": "nexus-nodes.openai",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        300
+      ],
+      "id": "0a8c6342-1a7b-49c9-b7a5-de44da66d7a2"
+    },
+    {
+      "parameters": {
+        "operation": "generateImage",
+        "model": "dall-e-3",
+        "prompt": "=Create a professional, clean image for a social media post about: {{$json[\"item\"]}}. The image should be suitable for LinkedIn and Twitter, with a modern tech aesthetic. No text in the image.",
+        "options": {
+          "quality": "standard",
+          "style": "natural",
+          "size": "1024x1024",
+          "responseFormat": "url"
+        }
+      },
+      "name": "Image Generator",
+      "type": "nexus-nodes.openai",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        500
+      ],
+      "id": "7a8f94e7-af8d-4ca7-8c10-5671233bd04d"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract data from previous nodes\nconst content = $input.item(0).json.choices[0].message.content;\nconst imageUrl = $input.item(0).json.data[0].url;\nconst topic = $input.item(0).json.item;\n\n// Calculate optimal posting time based on audience analytics\nconst calculateOptimalTime = (audienceAnalytics) => {\n  const now = new Date();\n  \n  // Get active hours from analytics\n  const activeHours = audienceAnalytics.activeHours;\n  \n  // Find the next active hour\n  let nextActiveHour;\n  for (const hour of activeHours) {\n    if (hour > now.getHours()) {\n      nextActiveHour = hour;\n      break;\n    }\n  }\n  \n  // If no active hour found for today, use the first active hour for tomorrow\n  if (!nextActiveHour) {\n    nextActiveHour = activeHours[0];\n    now.setDate(now.getDate() + 1);\n  }\n  \n  // Set the posting time\n  now.setHours(nextActiveHour);\n  now.setMinutes(Math.floor(Math.random() * 60)); // Random minute within the hour\n  now.setSeconds(0);\n  now.setMilliseconds(0);\n  \n  return now;\n};\n\n// Calculate posting time\nconst audienceAnalytics = $input.item(0).json.audienceAnalytics;\nconst scheduledTime = calculateOptimalTime(audienceAnalytics);\n\n// Return enhanced data\nreturn {\n  json: {\n    content: content,\n    imageUrl: imageUrl,\n    topic: topic,\n    scheduledTime: scheduledTime.toISOString(),\n    readableScheduledTime: scheduledTime.toString(),\n    engagement: {\n      expectedImpressions: Math.floor(1000 + Math.random() * 5000),\n      estimatedEngagementRate: (0.02 + Math.random() * 0.04).toFixed(3)\n    }\n  }\n};"
+      },
+      "name": "Schedule Calculation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        400
+      ],
+      "id": "b912c3e5-7cbe-4e5f-9ce1-3c58c9f90b22"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "tweet",
+        "text": "={{$node[\"Schedule Calculation\"].json[\"content\"]}}",
+        "additionalFields": {
+          "media": {
+            "media_ids": [
+              "={{$node[\"Media Upload\"].json[\"media_id_string\"]}}"
+            ]
+          }
+        }
+      },
+      "name": "Post Tweet",
+      "type": "n8n-nodes-base.twitter",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        400
+      ],
+      "id": "79b4d3d5-5e8b-4efb-a7e5-85a1e7fe7ae9",
+      "credentials": {
+        "twitterOAuth2Api": {
+          "id": "Twitter",
+          "name": "Twitter OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{$node[\"Schedule Calculation\"].json[\"imageUrl\"]}}",
+        "rules": {
+          "rules": [
+            {
+              "operation": "download"
+            }
+          ]
+        }
+      },
+      "name": "Download Image",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        1580,
+        300
+      ],
+      "id": "d0743f67-4c23-4e85-9e53-ca5cdba8ea2e"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "mediaUpload",
+        "binaryData": true,
+        "binaryPropertyName": "data"
+      },
+      "name": "Media Upload",
+      "type": "n8n-nodes-base.twitter",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        500
+      ],
+      "id": "f76ca1e8-90a7-44d3-a1d9-c44e2461e753",
+      "credentials": {
+        "twitterOAuth2Api": {
+          "id": "Twitter",
+          "name": "Twitter OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "collection": [
+          {
+            "name": "tweetData",
+            "value": "={{$node[\"Schedule Calculation\"].json}}"
+          }
+        ],
+        "options": {}
+      },
+      "name": "Analytics Storage",
+      "type": "n8n-nodes-base.mongodb",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        300
+      ],
+      "id": "5bba9a31-d9b3-4bff-a0ed-4deb62c5e4f4",
+      "credentials": {
+        "mongoDb": {
+          "id": "MongoDB",
+          "name": "MongoDB"
+        }
+      },
+      "alwaysOutputData": true
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Industry & Audience Setup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Industry & Audience Setup": {
+      "main": [
+        [
+          {
+            "node": "Topic Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Topic Generator": {
+      "main": [
+        [
+          {
+            "node": "Parse Topics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Topics": {
+      "main": [
+        [
+          {
+            "node": "Content Creation",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Image Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Content Creation": {
+      "main": [
+        [
+          {
+            "node": "Schedule Calculation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Image Generator": {
+      "main": [
+        [
+          {
+            "node": "Schedule Calculation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Calculation": {
+      "main": [
+        [
+          {
+            "node": "Download Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Image": {
+      "main": [
+        [
+          {
+            "node": "Media Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Media Upload": {
+      "main": [
+        [
+          {
+            "node": "Post Tweet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Tweet": {
+      "main": [
+        [
+          {
+            "node": "Analytics Storage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "saveExecutionProgress": true
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "social-media"
+    },
+    {
+      "name": "ai-generated"
+    },
+    {
+      "name": "production"
+    }
+  ],
+  "triggerCount": 1,
+  "versionId": "e14506cd-3b56-4cda-bbd1-4a7a36e78809"
+}

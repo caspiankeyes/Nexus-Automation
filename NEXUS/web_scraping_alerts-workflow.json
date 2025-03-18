@@ -1,0 +1,26 @@
+{
+  "name": "Intelligent Web Scraping & Alerts Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "minutesInterval": 60
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "id": "ba50f64a-8c74-cc6f-2d7e-c380c3f4b7b1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// This node loads monitoring configuration (in real world, this could come from a database)\nconst monitoringList = [\n  {\n    name: \"Company Blog Monitoring\",\n    url: \"https://example.com/blog\",\n    selectors: {\n      articles: \".blog-post\",\n      title: \"h2\",\n      date: \".post-date\",\n      summary: \".post-summary\",\n      author: \".post-author\"\n    },\n    keywords: [\"AI\", \"machine learning\", \"automation\", \"workflow\", \"n8n\"],\n    threshold: 0.6, // relevance threshold for alerts\n    channels: {\n      slack: true,\n      email: true\n    }\n  },\n  {\n    name: \"Competitor Monitoring\",\n    url: \"https://competitor.com/news\",\n    selectors: {\n      articles: \".news-item\",\n      title: \".news-title a\",\n      date: \".news-date\",\n      content: \".news-snippet\"\n    },\n    keywords: [\"product launch\", \"partnership\", \"acquisition\", \"funding\", \"new feature\"],\n    threshold: 0.7,\n    channels: {\n      slack: true,\n      email: false\n    }\n  },\n  {\n    name: \"Industry News Monitoring\",\n    url: \"https://industrynews.com/latest\",\n    selectors: {\n      articles: \"article\",\n      title: \"h3\",\n      date: \".published-date\",\n      summary: \".article-summary\",\n      category: \".category-tag\"\n    },\n    keywords: [\"industry trends\", \"market analysis\", \"regulations\", \"innovation\"],\n    threshold: 0.5,\n    channels: {\n

@@ -1,0 +1,385 @@
+---
+# n8n Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nexus-n8n
+  labels:
+    app: nexus-n8n
+
+---
+# ConfigMap for n8n 
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nexus-n8n-config
+  namespace: nexus-n8n
+data:
+  NODE_ENV: "production"
+  N8N_LOG_LEVEL: "info"
+  N8N_METRICS: "true"
+  N8N_DIAGNOSTICS: "false"
+  N8N_PATH: "/"
+  NODE_FUNCTION_ALLOW_EXTERNAL: "true"
+  EXECUTIONS_MODE: "queue"
+  QUEUE_BULL_PREFIX: "nexus-n8n"
+  N8N_AI_ENABLED: "true"
+  N8N_PUSH_BACKEND: "websocket"
+  DB_TYPE: "postgresdb"
+  DB_POSTGRESDB_PORT: "5432"
+  DB_POSTGRESDB_DATABASE: "n8n"
+  DB_POSTGRESDB_USER: "n8n"
+
+---
+# Secret for credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nexus-n8n-secrets
+  namespace: nexus-n8n
+type: Opaque
+data:
+  N8N_ENCRYPTION_KEY: "__CHANGE_ME__"  # replace with: echo -n "your-encryption-key" | base64
+  DB_POSTGRESDB_PASSWORD: "__CHANGE_ME__"  # replace with: echo -n "your-db-password" | base64
+  OPENAI_API_KEY: "__CHANGE_ME__"  # replace with: echo -n "your-openai-api-key" | base64
+  LANGCHAIN_API_KEY: "__CHANGE_ME__"  # replace with: echo -n "your-langchain-api-key" | base64
+
+---
+# Persistent Volume Claim for n8n data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nexus-n8n-data
+  namespace: nexus-n8n
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+# Persistent Volume Claim for PostgreSQL data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nexus-n8n-postgres-data
+  namespace: nexus-n8n
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: standard
+
+---
+# Persistent Volume Claim for Redis data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nexus-n8n-redis-data
+  namespace: nexus-n8n
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard
+
+---
+# PostgreSQL Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-n8n-postgres
+  namespace: nexus-n8n
+  labels:
+    app: nexus-n8n
+    component: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nexus-n8n
+      component: postgres
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: nexus-n8n
+        component: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-n8n-config
+              key: DB_POSTGRESDB_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nexus-n8n-secrets
+              key: DB_POSTGRESDB_PASSWORD
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-n8n-config
+              key: DB_POSTGRESDB_DATABASE
+        ports:
+        - containerPort: 5432
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - n8n
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - n8n
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+          subPath: postgres
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: nexus-n8n-postgres-data
+
+---
+# PostgreSQL Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexus-n8n-postgres
+  namespace: nexus-n8n
+  labels:
+    app: nexus-n8n
+    component: postgres
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+  selector:
+    app: nexus-n8n
+    component: postgres
+
+---
+# Redis Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-n8n-redis
+  namespace: nexus-n8n
+  labels:
+    app: nexus-n8n
+    component: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nexus-n8n
+      component: redis
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: nexus-n8n
+        component: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        command:
+        - redis-server
+        - --appendonly
+        - "yes"
+        ports:
+        - containerPort: 6379
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "512Mi"
+            cpu: "300m"
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+      volumes:
+      - name: redis-data
+        persistentVolumeClaim:
+          claimName: nexus-n8n-redis-data
+
+---
+# Redis Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexus-n8n-redis
+  namespace: nexus-n8n
+  labels:
+    app: nexus-n8n
+    component: redis
+spec:
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    app: nexus-n8n
+    component: redis
+
+---
+# n8n Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-n8n
+  namespace: nexus-n8n
+  labels:
+    app: nexus-n8n
+    component: n8n
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nexus-n8n
+      component: n8n
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: nexus-n8n
+        component: n8n
+    spec:
+      containers:
+      - name: n8n
+        image: nexus/n8n-ai:latest
+        imagePullPolicy: Always
+        env:
+        - name: N8N_PORT
+          value: "5678"
+        - name: N8N_PROTOCOL
+          value: "https"
+        - name: N8N_HOST
+          value: "n8n.example.com" # Change to your domain
+        - name: N8N_ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nexus-n8n-secrets
+              key: N8N_ENCRYPTION_KEY
+        - name: DB_TYPE
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-n8n-config
+              key: DB_TYPE
+        - name: DB_POSTGRESDB_HOST
+          value: "nexus-n8n-postgres"
+        - name: DB_POSTGRESDB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-n8n-config
+              key: DB_POSTGRESDB_PORT
+        - name: DB_POSTGRESDB_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-n8n-config
+              key: DB_POSTGRESDB_DATABASE
+        - name: DB_POSTGRESDB_USER
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-n8n-config
+              key: DB_POSTGRESDB_USER
+        - name: DB_POSTGRESDB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nexus-n8n-secrets
+              key: DB_POSTGRESDB_PASSWORD
+        - name: EXECUTIONS_MODE
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-n8n-config
+              key: EXECUTIONS_MODE
+        - name: QUEUE_BULL_REDIS_HOST
+          value: "nexus-n8n-redis"
+        - name: QUEUE_BULL_PREFIX
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-n8n-config
+              key: QUEUE_BULL_PREFIX
+        - name: N8N_METRICS
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-n8n-config
+              key: N8N_METRICS
+        # AI service configurations
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nexus-n8n-secrets
+              key: OPENAI_API_KEY
+        - name: LANGCHAIN_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nexus-n8n-secrets
+              key: LANGCHAIN_API_KEY
+              optional: true
+        - name: N8N_AI_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-n8n-config
+              key: N8N_AI_ENABLED
+        ports:
+        - containerPort: 5678
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 5678
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet

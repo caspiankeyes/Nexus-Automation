@@ -1,0 +1,314 @@
+"name": "Config Loader",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ],
+      "id": "c380c3f4-b7b1-6c38-c74c-c6f2d7ec380c"
+    },
+    {
+      "parameters": {
+        "url": "={{$json[\"url\"]}}",
+        "options": {
+          "timeout": 30000,
+          "waitForSelector": "=body",
+          "disableImages": true,
+          "disableStylesheet": true
+        }
+      },
+      "name": "Web Scraper",
+      "type": "nexus-nodes.puppeteer",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ],
+      "id": "3f4b7b16-c38c-74cc-6f2d-7ec380c3f4b7",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the scraped HTML and monitoring configuration\nconst html = $input.item(0).json.html;\nconst config = $input.item(0).json;\n\n// Simple HTML parsing functions (in production we would use a robust library)\nconst extractElements = (html, selector) => {\n  const results = [];\n  let startIdx = 0;\n  \n  // Simple regex-based extraction (not robust, just for demo)\n  const pattern = new RegExp(`<${selector}[^>]*>(.*?)<\\/${selector.split(' ')[0]}>`, 'gs');\n  let match;\n  \n  while ((match = pattern.exec(html)) !== null) {\n    results.push(match[1]);\n  }\n  \n  return results;\n};\n\nconst extractBySelector = (html, selector) => {\n  // Very simplified selector parsing for demonstration\n  if (selector.startsWith('.')) {\n    // Class selector\n    const className = selector.substring(1);\n    const pattern = new RegExp(`<[^>]*class=['\"]([^'\"]*${className}[^'\"]*)['\"][^>]*>(.*?)<\\/`, 'gs');\n    const results = [];\n    let match;\n    \n    while ((match = pattern.exec(html)) !== null) {\n      results.push(match[2]);\n    }\n    \n    return results;\n  } else {\n    // Element selector (simplified)\n    return extractElements(html, selector);\n  }\n};\n\n// Extract articles based on configuration\nlet articles = [];\ntry {\n  const articleElements = extractBySelector(html, config.selectors.articles);\n  \n  articles = articleElements.map((articleHtml, index) => {\n    // Extract article data using selectors\n    const title = extractBySelector(articleHtml, config.selectors.title)[0] || `Unknown Title ${index}`;\n    const date = extractBySelector(articleHtml, config.selectors.date)[0] || 'No date';\n    const summary = extractBySelector(articleHtml, config.selectors.summary)[0] || '';\n    const content = extractBySelector(articleHtml, config.selectors.content || config.selectors.summary)[0] || '';\n    \n    // Combine text for keyword matching\n    const fullText = `${title} ${summary} ${content}`.toLowerCase();\n    \n    // Calculate relevance score based on keyword matches\n    const keywords = config.keywords || [];\n    const matches = keywords.filter(keyword => fullText.includes(keyword.toLowerCase()));\n    const relevanceScore = matches.length / keywords.length;\n    \n    return {\n      title,\n      date,\n      summary: summary || content.substring(0, 200) + '...',\n      url: config.url,\n      source: config.name,\n      relevanceScore,\n      matchedKeywords: matches,\n      timestamp: new Date().toISOString(),\n      above_threshold: relevanceScore >= config.threshold\n    };\n  });\n} catch (error) {\n  // Log error but continue workflow\n  console.log(`Error parsing HTML from ${config.name}: ${error.message}`);\n  articles = [];\n}\n\n// Filter articles above relevance threshold\nconst relevantArticles = articles.filter(article => article.above_threshold);\n\n// Return both the configuration and relevant articles\nreturn {\n  json: {\n    ...config,\n    articlesFound: articles.length,\n    relevantArticles: relevantArticles.length,\n    articles: relevantArticles\n  }\n};"
+      },
+      "name": "Extract & Filter Content",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        900,
+        300
+      ],
+      "id": "7ec380c3-f4b7-b16c-38c7-4cc6d7ec38d6"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json[\"relevantArticles\"]}}",
+              "operation": "notEqual",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "name": "Has Relevant Content?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        300
+      ],
+      "id": "b16c38c7-4cc6-d7ec-38d6-c3f4b7b16c38"
+    },
+    {
+      "parameters": {
+        "operation": "chat",
+        "model": "gpt-4",
+        "messages": {
+          "values": [
+            {
+              "type": "selectOption",
+              "messageType": "system",
+              "message": "You are an expert content analyst. Your job is to analyze web content, summarize key points, and evaluate strategic relevance to a business."
+            },
+            {
+              "type": "selectOption",
+              "messageType": "user",
+              "message": "=I have found {{$json[\"relevantArticles\"]}} relevant articles from monitoring {{$json[\"name\"]}}. The articles matched these keywords: {{$json[\"articles\"][0][\"matchedKeywords\"].join(', ')}}.\n\nHere are the article details:\n\n{% for article in $json[\"articles\"] %}\nTitle: {{article.title}}\nDate: {{article.date}}\nSummary: {{article.summary}}\nRelevance Score: {{article.relevanceScore}}\n\n{% endfor %}\n\nPlease analyze this content and provide:\n1. A concise summary of the key information (1-2 paragraphs)\n2. Strategic implications for a business in this industry\n3. A relevance score from 1-10 based on potential business impact\n\nFormat your response as structured markdown."
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 1000
+        }
+      },
+      "name": "AI Content Analysis",
+      "type": "nexus-nodes.openai",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        260
+      ],
+      "id": "d7ec380c-3f4b-7b16-c38c-74cc6f2d7ec"
+    },
+    {
+      "parameters": {
+        "channel": "={{$json[\"channels\"][\"slack\"] ? \"web-monitoring\" : \"\"}}",
+        "text": "=## 🔍 Web Monitoring Alert: {{$json[\"name\"]}}\n\n{{$node[\"AI Content Analysis\"].json[\"choices\"][0][\"message\"][\"content\"]}}\n\n**Source:** [{{$json[\"name\"]}}]({{$json[\"url\"]}})\n**Detected:** {{$now}}\n**Matched Keywords:** {{$json[\"articles\"][0][\"matchedKeywords\"].join(', ')}}\n\n---\n*This alert was generated by the Intelligent Web Monitoring Pipeline*",
+        "attachments": "=[]",
+        "otherOptions": {
+          "threadTs": ""
+        }
+      },
+      "name": "Slack Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        1580,
+        180
+      ],
+      "id": "c6f2d7ec-380c-3f4b-7b16-c38c74cc6f2",
+      "credentials": {
+        "slackApi": {
+          "id": "Slack API",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "subject": "=Web Monitoring Alert: {{$json[\"name\"]}} - {{$json[\"articles\"][0][\"matchedKeywords\"].join(', ')}}",
+        "html": "=<h1>Web Monitoring Alert</h1>\n<h2>Source: {{$json[\"name\"]}}</h2>\n\n<div style=\"border-left: 4px solid #0078d4; padding-left: 15px; margin: 20px 0;\">\n  {{$node[\"AI Content Analysis\"].json[\"choices\"][0][\"message\"][\"content\"]}}\n</div>\n\n<p><strong>Detected:</strong> {{$now}}</p>\n<p><strong>Matched Keywords:</strong> {{$json[\"articles\"][0][\"matchedKeywords\"].join(', ')}}</p>\n<p><strong>Source URL:</strong> <a href=\"{{$json[\"url\"]}}\">{{$json[\"url\"]}}</a></p>\n\n<hr>\n<p style=\"color: #666; font-size: 12px;\">This alert was generated by the Intelligent Web Monitoring Pipeline</p>",
+        "attachments": "=[]",
+        "options": {}
+      },
+      "name": "Email Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        340
+      ],
+      "id": "d6c3f4b7-b16c-38c7-4cc6-d7ec38d6c3",
+      "credentials": {
+        "smtp": {
+          "id": "Email SMTP",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "collection": [
+          {
+            "name": "web_monitoring_results",
+            "value": "={{$node[\"Merge Analysis\"].json}}"
+          }
+        ],
+        "options": {}
+      },
+      "name": "Database Storage",
+      "type": "n8n-nodes-base.mongodb",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        300
+      ],
+      "id": "f2d7ec38-0c3f-4b7b-bd6c-16388ba50f64",
+      "credentials": {
+        "mongoDb": {
+          "id": "MongoDB",
+          "name": "MongoDB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// This node combines the original data with the AI analysis\nconst originalData = $input.item(0).json;\nconst aiAnalysis = $node[\"AI Content Analysis\"].json;\n\n// Extract numeric relevance score from AI analysis text\nconst extractRelevanceScore = (text) => {\n  const content = text.choices[0].message.content;\n  const scoreMatch = content.match(/relevance score:?\\s*(\\d+)/i) || content.match(/score:?\\s*(\\d+)\\/10/i);\n  return scoreMatch ? parseInt(scoreMatch[1], 10) : null;\n};\n\n// Calculate aggregate relevance score\nconst aiRelevanceScore = extractRelevanceScore(aiAnalysis);\nconst aggregateScore = aiRelevanceScore || Math.round(originalData.articles.reduce((sum, article) => sum + article.relevanceScore * 10, 0) / originalData.articles.length);\n\n// Format matched keywords for better readability\nconst uniqueKeywords = new Set();\noriginalData.articles.forEach(article => {\n  article.matchedKeywords.forEach(keyword => uniqueKeywords.add(keyword));\n});\n\n// Return combined data\nreturn {\n  json: {\n    ...originalData,\n    aiAnalysis: aiAnalysis.choices[0].message.content,\n    aggregateRelevanceScore: aggregateScore,\n    uniqueKeywords: Array.from(uniqueKeywords),\n    processingTimestamp: new Date().toISOString(),\n    notificationsSent: {\n      slack: originalData.channels.slack,\n      email: originalData.channels.email\n    }\n  }\n};"
+      },
+      "name": "Merge Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1580,
+        500
+      ],
+      "id": "1a8e1b6e-ae25-a8c7-4cc6-d7ec38d6c3f4"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config Loader",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config Loader": {
+      "main": [
+        [
+          {
+            "node": "Web Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Web Scraper": {
+      "main": [
+        [
+          {
+            "node": "Extract & Filter Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract & Filter Content": {
+      "main": [
+        [
+          {
+            "node": "Has Relevant Content?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Relevant Content?": {
+      "main": [
+        [
+          {
+            "node": "AI Content Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "AI Content Analysis": {
+      "main": [
+        [
+          {
+            "node": "Slack Notification",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Notification": {
+      "main": [
+        [
+          {
+            "node": "Database Storage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Alert": {
+      "main": [
+        [
+          {
+            "node": "Database Storage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Analysis": {
+      "main": [
+        [
+          {
+            "node": "Database Storage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "saveExecutionProgress": true
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "web-monitoring"
+    },
+    {
+      "name": "ai-analysis"
+    },
+    {
+      "name": "production"
+    }
+  ],
+  "triggerCount": 1,
+  "versionId": "a8c74cc6-83c7-4d49-b06e-1a8e1b6eae25"
+}

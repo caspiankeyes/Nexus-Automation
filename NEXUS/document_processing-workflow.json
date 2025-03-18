@@ -1,0 +1,659 @@
+{
+  "name": "Intelligent Document Processing Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "document-processor",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "document-processor-trigger",
+      "id": "f2d7ec38-0c3f-4b7b-bd6c-16388ba50f64"
+    },
+    {
+      "parameters": {
+        "filePath": "={{$json[\"document\"]}}",
+        "options": {
+          "binaryPropertyName": "document"
+        }
+      },
+      "name": "Read Binary File",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ],
+      "id": "a8c74cc6-83c7-4d49-b06e-1a8e1b6eae25"
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "model": "gpt-4",
+        "promptType": "dynamic",
+        "prompt": "=Classify the following document into one of these categories: Invoice, Resume, Contract, Legal, Technical, Financial, Medical, or Other.\n\nDocument content:\n{{$json[\"fileContent\"]}}\n\nProvide just the single category without explanation.",
+        "options": {
+          "temperature": 0.1,
+          "maxTokens": 50
+        }
+      },
+      "name": "Document Classifier",
+      "type": "nexus-nodes.openai",
+      "typeVersion": 1,
+      "position": [
+        900,
+        300
+      ],
+      "id": "bd1a8e1b-6eae-4d49-a8c7-ec380c3f4b7b"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"choices\"][0][\"text\"].trim()}}",
+              "operation": "equal",
+              "value2": "Invoice"
+            }
+          ]
+        }
+      },
+      "name": "Is Invoice?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        300
+      ],
+      "id": "c4b7bbdc-a8c7-4d49-bd6c-ec38f2d7ec38"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"choices\"][0][\"text\"].trim()}}",
+              "operation": "equal",
+              "value2": "Resume"
+            }
+          ]
+        }
+      },
+      "name": "Is Resume?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        500
+      ],
+      "id": "16eaa8c7-4cc6-b6ea-b06e-50f64a8c74c6"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"choices\"][0][\"text\"].trim()}}",
+              "operation": "equal",
+              "value2": "Contract"
+            }
+          ]
+        }
+      },
+      "name": "Is Contract?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        700
+      ],
+      "id": "4b7b38d6-16c3-b06e-3f4b-f64a8c74cc6f"
+    },
+    {
+      "parameters": {
+        "fromMimeType": "application/pdf",
+        "toMimeType": "text/plain",
+        "options": {}
+      },
+      "name": "PDF to Text",
+      "type": "n8n-nodes-base.convertDocuments",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ],
+      "id": "83c7d6c3-f64a-1a8e-4b7b-f2d7ec38bd6c"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract file content from binary data\nlet fileContent = '';\n\nif ($input.item(0).binary.document) {\n  if ($input.item(0).binary.document.mimeType === 'application/pdf') {\n    // PDF was converted to text\n    fileContent = $input.item(0).binary.document.text || '';\n  } else if ($input.item(0).binary.document.mimeType.startsWith('text/')) {\n    // Text-based document\n    fileContent = Buffer.from($input.item(0).binary.document.data, 'base64').toString('utf-8');\n  } else if ($input.item(0).binary.document.mimeType.includes('word') || \n             $input.item(0).binary.document.mimeType.includes('office')) {\n    // Word document - simplified extraction\n    // In a real implementation, would use specific library for extraction\n    fileContent = 'Word document content would be extracted here...';\n  }\n}\n\n// Truncate content if too long (GPT-4 context window limitation)\nconst MAX_CONTENT_LENGTH = 8000;\nif (fileContent.length > MAX_CONTENT_LENGTH) {\n  fileContent = fileContent.substring(0, MAX_CONTENT_LENGTH) + '\\n[Content truncated due to length...]';\n}\n\n// Return the item with file content added\nreturn {\n  json: {\n    ...$input.item(0).json,\n    fileContent: fileContent,\n    documentName: $input.item(0).binary.document.fileName || 'unknown-document',\n    mimeType: $input.item(0).binary.document.mimeType,\n    fileSize: $input.item(0).binary.document.fileSize,\n    extractionTimestamp: new Date().toISOString()\n  },\n  binary: $input.item(0).binary\n};"
+      },
+      "name": "Extract Text Content",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        680,
+        440
+      ],
+      "id": "16c3c74c-bd6c-d7ec-c6f2-4b7b38d6c3f6",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "extractStructured",
+        "document": "={{$json[\"fileContent\"]}}",
+        "schema": "{\n  \"invoice_number\": \"string\",\n  \"date\": \"string\",\n  \"due_date\": \"string\",\n  \"vendor\": {\n    \"name\": \"string\",\n    \"address\": \"string\",\n    \"contact\": \"string\"\n  },\n  \"client\": {\n    \"name\": \"string\",\n    \"address\": \"string\"\n  },\n  \"items\": [\n    {\n      \"description\": \"string\",\n      \"quantity\": \"number\",\n      \"unit_price\": \"number\",\n      \"amount\": \"number\"\n    }\n  ],\n  \"subtotal\": \"number\",\n  \"tax\": \"number\",\n  \"total\": \"number\",\n  \"payment_details\": {\n    \"method\": \"string\",\n    \"account_info\": \"string\"\n  }\n}",
+        "model": "langchain/structured-extraction",
+        "temperature": 0.2,
+        "outputFormat": "json"
+      },
+      "name": "Invoice Extractor",
+      "type": "nexus-nodes.langchain",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        300
+      ],
+      "id": "1a8e38d6-ec38-f2d7-a8c7-4cc6bd6c3f4b"
+    },
+    {
+      "parameters": {
+        "operation": "extractStructured",
+        "document": "={{$json[\"fileContent\"]}}",
+        "schema": "{\n  \"personal_info\": {\n    \"name\": \"string\",\n    \"email\": \"string\",\n    \"phone\": \"string\",\n    \"address\": \"string\",\n    \"linkedin\": \"string\"\n  },\n  \"summary\": \"string\",\n  \"skills\": [\n    \"string\"\n  ],\n  \"experience\": [\n    {\n      \"company\": \"string\",\n      \"position\": \"string\",\n      \"duration\": \"string\",\n      \"responsibilities\": [\n        \"string\"\n      ]\n    }\n  ],\n  \"education\": [\n    {\n      \"institution\": \"string\",\n      \"degree\": \"string\",\n      \"year\": \"string\"\n    }\n  ],\n  \"certifications\": [\n    \"string\"\n  ]\n}",
+        "model": "langchain/structured-extraction",
+        "temperature": 0.2,
+        "outputFormat": "json"
+      },
+      "name": "Resume Parser",
+      "type": "nexus-nodes.langchain",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        500
+      ],
+      "id": "f64a8c74-cc6f-2d7e-c380-c3f4b7b16c3"
+    },
+    {
+      "parameters": {
+        "operation": "extractStructured",
+        "document": "={{$json[\"fileContent\"]}}",
+        "schema": "{\n  \"contract_type\": \"string\",\n  \"parties\": [\n    {\n      \"name\": \"string\",\n      \"type\": \"string\",\n      \"address\": \"string\"\n    }\n  ],\n  \"effective_date\": \"string\",\n  \"termination_date\": \"string\",\n  \"value\": \"string\",\n  \"key_clauses\": [\n    {\n      \"title\": \"string\",\n      \"summary\": \"string\"\n    }\n  ],\n  \"governing_law\": \"string\",\n  \"obligations\": [\n    {\n      \"party\": \"string\",\n      \"description\": \"string\"\n    }\n  ],\n  \"termination_conditions\": [\n    \"string\"\n  ]\n}",
+        "model": "langchain/structured-extraction",
+        "temperature": 0.2,
+        "outputFormat": "json"
+      },
+      "name": "Contract Analyzer",
+      "type": "nexus-nodes.langchain",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        700
+      ],
+      "id": "ec38d6c3-f4b7-c74c-16c3-8c74cc6f2d7"
+    },
+    {
+      "parameters": {
+        "operation": "chat",
+        "model": "gpt-3.5-turbo",
+        "messages": {
+          "values": [
+            {
+              "type": "selectOption",
+              "messageType": "system",
+              "message": "You are a document summarization assistant. Create clear and concise summaries of documents, focusing on their key points and main purpose."
+            },
+            {
+              "type": "selectOption",
+              "messageType": "user",
+              "message": "=Create a brief summary (max 200 words) of this document classified as {{$node[\"Document Classifier\"].json[\"choices\"][0][\"text\"]}}:\n\n{{$json[\"fileContent\"]}}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 500
+        }
+      },
+      "name": "Document Summarizer",
+      "type": "nexus-nodes.openai",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        900
+      ],
+      "id": "4cc6d7ec-38d6-c3f4-b7b1-6c38c74cc6f2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.company.com/document-storage",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "document_id",
+              "value": "={{$json[\"document_id\"]}}"
+            },
+            {
+              "name": "document_type",
+              "value": "={{$node[\"Document Classifier\"].json[\"choices\"][0][\"text\"]}}"
+            },
+            {
+              "name": "processed_data",
+              "value": "={{$json}}"
+            },
+            {
+              "name": "summary",
+              "value": "={{$node[\"Document Summarizer\"].json[\"choices\"][0][\"message\"][\"content\"]}}"
+            },
+            {
+              "name": "processing_timestamp",
+              "value": "={{$now}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "API Integration",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1580,
+        600
+      ],
+      "id": "f2d7ec38-0c3f-4b7b-bd6c-16388ba50f64",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "API Authentication",
+          "name": "HTTP Header Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "document_id": {
+              "type": "string",
+              "description": "Unique identifier for the document"
+            },
+            "document_type": {
+              "type": "string",
+              "description": "Type of document identified by the classifier"
+            },
+            "processed_data": {
+              "type": "object",
+              "description": "Structured data extracted from the document"
+            },
+            "summary": {
+              "type": "string",
+              "description": "Brief summary of the document"
+            },
+            "metadata": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string"
+                },
+                "timestamp": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "confidence": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "required": ["document_id", "document_type", "processed_data"]
+        },
+        "options": {
+          "validationMode": "strict"
+        }
+      },
+      "name": "Data Schema Validator",
+      "type": "n8n-nodes-base.jsonSchemaValidation",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        600
+      ],
+      "id": "74cc6f2d-7ec3-80c3-f4b7-b38d6c3f4b7b"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"valid\"]}}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "name": "Is Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2020,
+        600
+      ],
+      "id": "c3f4b7b1-6c38-c74c-c6f2-d7ec380c3f4b"
+    },
+    {
+      "parameters": {
+        "collection": [
+          {
+            "name": "documents",
+            "value": "={{$json[\"processed_data\"]}}"
+          }
+        ],
+        "options": {}
+      },
+      "name": "Database Storage",
+      "type": "n8n-nodes-base.mongodb",
+      "typeVersion": 1,
+      "position": [
+        2240,
+        500
+      ],
+      "id": "b06e1a8e-1b6e-ae25-a8c7-4cc6d7ec38d6",
+      "credentials": {
+        "mongoDb": {
+          "id": "MongoDB",
+          "name": "MongoDB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "subject": "=Document Processing Error: {{$json[\"document_id\"]}}",
+        "html": "=<h2>Document Processing Failed</h2>\n<p>A document has failed schema validation during processing.</p>\n\n<h3>Details:</h3>\n<ul>\n  <li><strong>Document ID:</strong> {{$json[\"document_id\"]}}</li>\n  <li><strong>Document Type:</strong> {{$json[\"document_type\"]}}</li>\n  <li><strong>Timestamp:</strong> {{$now}}</li>\n</ul>\n\n<h3>Validation Errors:</h3>\n<pre>{{$json[\"errors\"]}}</pre>\n\n<p>Please review the document and resubmit for processing.</p>",
+        "attachments": "=[]",
+        "options": {}
+      },
+      "name": "Error Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        700
+      ],
+      "id": "4b7b38d6-c3f4-b7b1-6c38-c74cc6f2d7",
+      "credentials": {
+        "smtp": {
+          "id": "SMTP",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Data for final processing\nconst data = {\n  document_id: $input.item(0).json.documentName.replace(/\\.[^/.]+$/, '') + '_' + Date.now(),\n  document_type: $node[\"Document Classifier\"].json.choices[0].text.trim(),\n  processed_data: {},\n  metadata: {\n    source: 'document-processing-pipeline',\n    timestamp: new Date().toISOString(),\n    confidence: 0.95\n  }\n};\n\n// Get the extracted data based on document type\nswitch(data.document_type) {\n  case 'Invoice':\n    if ($node[\"Invoice Extractor\"].json) {\n      data.processed_data = $node[\"Invoice Extractor\"].json.result || {};\n    }\n    break;\n  case 'Resume':\n    if ($node[\"Resume Parser\"].json) {\n      data.processed_data = $node[\"Resume Parser\"].json.result || {};\n    }\n    break;\n  case 'Contract':\n    if ($node[\"Contract Analyzer\"].json) {\n      data.processed_data = $node[\"Contract Analyzer\"].json.result || {};\n    }\n    break;\n  default:\n    // For other document types, include basic info and summary\n    data.processed_data = {\n      type: data.document_type,\n      text: $input.item(0).json.fileContent.substring(0, 1000) + '...',\n      size: $input.item(0).json.fileSize\n    };\n}\n\n// Add summary if available\nif ($node[\"Document Summarizer\"].json) {\n  data.summary = $node[\"Document Summarizer\"].json.choices[0].message.content;\n}\n\nreturn { json: data };"
+      },
+      "name": "Final Data Preparation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        900
+      ],
+      "id": "c74cc6f2-d7ec-380c-3f4b-7b16c38c74c6",
+      "alwaysOutputData": true
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Binary File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Binary File": {
+      "main": [
+        [
+          {
+            "node": "PDF to Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document Classifier": {
+      "main": [
+        [
+          {
+            "node": "Is Invoice?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Is Resume?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Is Contract?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Document Summarizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Invoice?": {
+      "main": [
+        [
+          {
+            "node": "Invoice Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Final Data Preparation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Resume?": {
+      "main": [
+        [
+          {
+            "node": "Resume Parser",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Final Data Preparation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Contract?": {
+      "main": [
+        [
+          {
+            "node": "Contract Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Final Data Preparation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF to Text": {
+      "main": [
+        [
+          {
+            "node": "Extract Text Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Text Content": {
+      "main": [
+        [
+          {
+            "node": "Document Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invoice Extractor": {
+      "main": [
+        [
+          {
+            "node": "Final Data Preparation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resume Parser": {
+      "main": [
+        [
+          {
+            "node": "Final Data Preparation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contract Analyzer": {
+      "main": [
+        [
+          {
+            "node": "Final Data Preparation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document Summarizer": {
+      "main": [
+        [
+          {
+            "node": "Final Data Preparation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Data Preparation": {
+      "main": [
+        [
+          {
+            "node": "API Integration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API Integration": {
+      "main": [
+        [
+          {
+            "node": "Data Schema Validator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Schema Validator": {
+      "main": [
+        [
+          {
+            "node": "Is Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid?": {
+      "main": [
+        [
+          {
+            "node": "Database Storage",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "saveExecutionProgress": true
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "document-processing"
+    },
+    {
+      "name": "ai-integration"
+    },
+    {
+      "name": "production"
+    }
+  ],
+  "triggerCount": 1,
+  "versionId": "c74cc6f2-d7ec-380c-3f4b-7b16c38c74c6"
+}

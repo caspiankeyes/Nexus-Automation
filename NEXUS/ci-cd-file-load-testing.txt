@@ -1,0 +1,258 @@
+name: Performance & Load Testing
+
+on:
+  schedule:
+    - cron: '0 1 * * 1'  # Run at 1 AM every Monday
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: 'Environment to test'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      test_duration:
+        description: 'Test duration in minutes'
+        required: true
+        default: '10'
+        type: number
+      concurrent_users:
+        description: 'Maximum number of concurrent virtual users'
+        required: true
+        default: '50'
+        type: number
+      ramp_up_time:
+        description: 'Ramp-up time in seconds'
+        required: true
+        default: '60'
+        type: number
+
+jobs:
+  prepare:
+    name: Prepare Load Test
+    runs-on: ubuntu-latest
+    outputs:
+      target_url: ${{ steps.set-url.outputs.target_url }}
+      test_duration: ${{ steps.set-params.outputs.test_duration }}
+      concurrent_users: ${{ steps.set-params.outputs.concurrent_users }}
+      ramp_up_time: ${{ steps.set-params.outputs.ramp_up_time }}
+    steps:
+      - name: Set target URL
+        id: set-url
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            if [ "${{ github.event.inputs.target_environment }}" == "production" ]; then
+              echo "target_url=${{ secrets.PROD_N8N_URL }}" >> $GITHUB_OUTPUT
+            else
+              echo "target_url=${{ secrets.STAGING_N8N_URL }}" >> $GITHUB_OUTPUT
+            fi
+          else
+            # Default to staging for scheduled runs
+            echo "target_url=${{ secrets.STAGING_N8N_URL }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set test parameters
+        id: set-params
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "test_duration=${{ github.event.inputs.test_duration }}" >> $GITHUB_OUTPUT
+            echo "concurrent_users=${{ github.event.inputs.concurrent_users }}" >> $GITHUB_OUTPUT
+            echo "ramp_up_time=${{ github.event.inputs.ramp_up_time }}" >> $GITHUB_OUTPUT
+          else
+            # Default values for scheduled runs
+            echo "test_duration=15" >> $GITHUB_OUTPUT
+            echo "concurrent_users=50" >> $GITHUB_OUTPUT
+            echo "ramp_up_time=60" >> $GITHUB_OUTPUT
+          fi
+
+  load-test:
+    name: Execute Load Test
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install k6
+        run: |
+          curl -s https://packagecloud.io/install/repositories/k6/k6/script.deb.sh | sudo bash
+          sudo apt-get install k6
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-test.txt
+
+      - name: Generate test credentials
+        run: |
+          python ./scripts/generate_test_creds.py \
+            --api-key "${{ secrets.LOAD_TEST_API_KEY }}" \
+            --output "./tests/load/credentials.json"
+
+      - name: Run k6 load test
+        run: |
+          k6 run ./tests/load/workflow-execution.js \
+            --out json=results.json \
+            --summary-export=summary.json \
+            --vus ${{ needs.prepare.outputs.concurrent_users }} \
+            --duration ${{ needs.prepare.outputs.test_duration }}m \
+            --stage 0s:0,${{ needs.prepare.outputs.ramp_up_time }}s:${{ needs.prepare.outputs.concurrent_users }},${{ needs.prepare.outputs.test_duration }}m:${{ needs.prepare.outputs.concurrent_users }}
+        env:
+          TARGET_URL: ${{ needs.prepare.outputs.target_url }}
+          API_KEY: ${{ secrets.LOAD_TEST_API_KEY }}
+
+      - name: Process test results
+        run: |
+          python ./scripts/process_load_test_results.py \
+            --results results.json \
+            --summary summary.json \
+            --output report.md \
+            --thresholds ./tests/load/thresholds.json
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        with:
+          name: load-test-results
+          path: |
+            results.json
+            summary.json
+            report.md
+
+  api-test:
+    name: API Performance Test
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-test.txt
+          pip install locust
+
+      - name: Run Locust test in headless mode
+        run: |
+          locust -f ./tests/load/api_test.py \
+            --host ${{ needs.prepare.outputs.target_url }} \
+            --users ${{ needs.prepare.outputs.concurrent_users }} \
+            --spawn-rate 5 \
+            --run-time ${{ needs.prepare.outputs.test_duration }}m \
+            --headless \
+            --csv=locust \
+            --html=locust_report.html
+        env:
+          LOCUST_API_KEY: ${{ secrets.LOAD_TEST_API_KEY }}
+
+      - name: Upload Locust results
+        uses: actions/upload-artifact@v3
+        with:
+          name: api-test-results
+          path: |
+            locust_*.csv
+            locust_report.html
+
+  workflow-benchmark:
+    name: Workflow Benchmark
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-test.txt
+
+      - name: Run workflow performance benchmark
+        run: |
+          python ./scripts/benchmark_workflows.py \
+            --target ${{ needs.prepare.outputs.target_url }} \
+            --api-key ${{ secrets.LOAD_TEST_API_KEY }} \
+            --iterations 10 \
+            --output benchmark_results.json
+
+      - name: Generate benchmark report
+        run: |
+          python ./scripts/generate_benchmark_report.py \
+            --input benchmark_results.json \
+            --output benchmark_report.md \
+            --compare-with ./benchmark/baseline.json
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v3
+        with:
+          name: workflow-benchmark-results
+          path: |
+            benchmark_results.json
+            benchmark_report.md
+
+  report:
+    name: Generate Consolidated Report
+    needs: [load-test, api-test, workflow-benchmark]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-test.txt
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Generate consolidated report
+        run: |
+          python ./scripts/generate_performance_report.py \
+            --load-test artifacts/load-test-results/report.md \
+            --api-test artifacts/api-test-results/locust_report.html \
+            --workflow-benchmark artifacts/workflow-benchmark-results/benchmark_report.md \
+            --output performance_report.md
+
+      - name: Upload consolidated report
+        uses: actions/upload-artifact@v3
+        with:
+          name: consolidated-performance-report
+          path: performance_report.md
+
+      - name: Send notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          fields: repo,message,commit,author,action,workflow
+          text: 'Performance testing completed. Results available in GitHub Actions artifacts.'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        if: always()

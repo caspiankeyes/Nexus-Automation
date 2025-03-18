@@ -1,0 +1,1081 @@
+extractHeadersFrom: [
+              'manualHeaders',
+            ],
+          },
+        },
+        default: {},
+        options: [
+          {
+            name: 'headers',
+            displayName: 'Header',
+            values: [
+              {
+                displayName: 'Name',
+                name: 'name',
+                type: 'string',
+                default: '',
+                description: 'Name of the header column',
+                required: true,
+              },
+            ],
+          },
+        ],
+        description: 'Manually define the headers for the table',
+      },
+      {
+        displayName: 'Row Selector',
+        name: 'rowSelector',
+        type: 'string',
+        displayOptions: {
+          show: {
+            operation: [
+              'scrapeTable',
+            ],
+          },
+        },
+        default: 'tbody tr',
+        description: 'CSS selector for the table rows',
+      },
+      {
+        displayName: 'Cell Selector',
+        name: 'cellSelector',
+        type: 'string',
+        displayOptions: {
+          show: {
+            operation: [
+              'scrapeTable',
+            ],
+          },
+        },
+        default: 'td',
+        description: 'CSS selector for the table cells',
+      },
+      
+      // Screenshot Configuration
+      {
+        displayName: 'Full Page',
+        name: 'fullPage',
+        type: 'boolean',
+        displayOptions: {
+          show: {
+            operation: [
+              'screenshot',
+            ],
+          },
+        },
+        default: true,
+        description: 'Whether to take a screenshot of the full page or just the viewport',
+      },
+      {
+        displayName: 'Element Selector',
+        name: 'elementSelector',
+        type: 'string',
+        displayOptions: {
+          show: {
+            operation: [
+              'screenshot',
+            ],
+            fullPage: [
+              false,
+            ],
+          },
+        },
+        default: '',
+        placeholder: 'div.main-content',
+        description: 'CSS selector for a specific element to screenshot (leave empty for viewport)',
+      },
+      {
+        displayName: 'Output Format',
+        name: 'outputFormat',
+        type: 'options',
+        displayOptions: {
+          show: {
+            operation: [
+              'screenshot',
+            ],
+          },
+        },
+        options: [
+          {
+            name: 'PNG',
+            value: 'png',
+            description: 'Save screenshot as PNG',
+          },
+          {
+            name: 'JPEG',
+            value: 'jpeg',
+            description: 'Save screenshot as JPEG',
+          },
+          {
+            name: 'WebP',
+            value: 'webp',
+            description: 'Save screenshot as WebP',
+          },
+        ],
+        default: 'png',
+        description: 'The format of the screenshot',
+      },
+      {
+        displayName: 'Quality',
+        name: 'quality',
+        type: 'number',
+        displayOptions: {
+          show: {
+            operation: [
+              'screenshot',
+            ],
+            outputFormat: [
+              'jpeg',
+              'webp',
+            ],
+          },
+        },
+        default: 80,
+        description: 'The quality of the image (1-100)',
+        typeOptions: {
+          minValue: 1,
+          maxValue: 100,
+        },
+      },
+      
+      // PDF Configuration
+      {
+        displayName: 'PDF Options',
+        name: 'pdfOptions',
+        type: 'collection',
+        placeholder: 'Add Option',
+        displayOptions: {
+          show: {
+            operation: [
+              'pdf',
+            ],
+          },
+        },
+        default: {},
+        options: [
+          {
+            displayName: 'Format',
+            name: 'format',
+            type: 'options',
+            options: [
+              {
+                name: 'Letter',
+                value: 'Letter',
+              },
+              {
+                name: 'Legal',
+                value: 'Legal',
+              },
+              {
+                name: 'Tabloid',
+                value: 'Tabloid',
+              },
+              {
+                name: 'A0',
+                value: 'A0',
+              },
+              {
+                name: 'A1',
+                value: 'A1',
+              },
+              {
+                name: 'A2',
+                value: 'A2',
+              },
+              {
+                name: 'A3',
+                value: 'A3',
+              },
+              {
+                name: 'A4',
+                value: 'A4',
+              },
+              {
+                name: 'A5',
+                value: 'A5',
+              },
+              {
+                name: 'A6',
+                value: 'A6',
+              },
+            ],
+            default: 'A4',
+            description: 'The paper format of the PDF',
+          },
+          {
+            displayName: 'Landscape',
+            name: 'landscape',
+            type: 'boolean',
+            default: false,
+            description: 'Whether to use landscape orientation',
+          },
+          {
+            displayName: 'Display Header/Footer',
+            name: 'displayHeaderFooter',
+            type: 'boolean',
+            default: false,
+            description: 'Whether to display the header and footer',
+          },
+          {
+            displayName: 'Header Template',
+            name: 'headerTemplate',
+            type: 'string',
+            displayOptions: {
+              show: {
+                displayHeaderFooter: [
+                  true,
+                ],
+              },
+            },
+            default: '',
+            description: 'HTML template for the header',
+            placeholder: '<div style="font-size: 10px; width: 100%; text-align: center;">Title</div>',
+          },
+          {
+            displayName: 'Footer Template',
+            name: 'footerTemplate',
+            type: 'string',
+            displayOptions: {
+              show: {
+                displayHeaderFooter: [
+                  true,
+                ],
+              },
+            },
+            default: '',
+            description: 'HTML template for the footer',
+            placeholder: '<div style="font-size: 10px; width: 100%; text-align: center;"><span class="pageNumber"></span> of <span class="totalPages"></span></div>',
+          },
+          {
+            displayName: 'Print Background',
+            name: 'printBackground',
+            type: 'boolean',
+            default: true,
+            description: 'Whether to print background graphics',
+          },
+          {
+            displayName: 'Scale',
+            name: 'scale',
+            type: 'number',
+            default: 1,
+            description: 'Scale of the webpage rendering (0.1 - 2)',
+            typeOptions: {
+              minValue: 0.1,
+              maxValue: 2,
+              stepSize: 0.1,
+            },
+          },
+        ],
+      },
+      
+      // Pagination Configuration
+      {
+        displayName: 'Pagination Selector',
+        name: 'paginationSelector',
+        type: 'string',
+        displayOptions: {
+          show: {
+            operation: [
+              'pagination',
+            ],
+          },
+        },
+        default: '',
+        placeholder: 'a.next-page',
+        description: 'CSS selector for the next page button/link',
+        required: true,
+      },
+      {
+        displayName: 'Max Pages',
+        name: 'maxPages',
+        type: 'number',
+        displayOptions: {
+          show: {
+            operation: [
+              'pagination',
+            ],
+          },
+        },
+        default: 5,
+        description: 'Maximum number of pages to scrape',
+        typeOptions: {
+          minValue: 1,
+        },
+      },
+      {
+        displayName: 'Data Selectors',
+        name: 'dataSelectors',
+        placeholder: 'Add Data Selector',
+        type: 'fixedCollection',
+        typeOptions: {
+          multipleValues: true,
+        },
+        displayOptions: {
+          show: {
+            operation: [
+              'pagination',
+            ],
+          },
+        },
+        default: {},
+        options: [
+          {
+            name: 'values',
+            displayName: 'Values',
+            values: [
+              {
+                displayName: 'Field Name',
+                name: 'fieldName',
+                type: 'string',
+                default: '',
+                description: 'Name of the field to extract',
+                placeholder: 'e.g. title',
+                required: true,
+              },
+              {
+                displayName: 'Selector',
+                name: 'selector',
+                type: 'string',
+                default: '',
+                description: 'CSS selector of the element to extract',
+                placeholder: 'e.g. h1.title',
+                required: true,
+              },
+              {
+                displayName: 'Extraction Type',
+                name: 'extractionType',
+                type: 'options',
+                options: [
+                  {
+                    name: 'Text',
+                    value: 'text',
+                    description: 'Extract the text content of the element',
+                  },
+                  {
+                    name: 'HTML',
+                    value: 'html',
+                    description: 'Extract the HTML content of the element',
+                  },
+                  {
+                    name: 'Attribute',
+                    value: 'attribute',
+                    description: 'Extract the value of a specific attribute',
+                  },
+                ],
+                default: 'text',
+                description: 'What to extract from the selected element',
+              },
+              {
+                displayName: 'Attribute Name',
+                name: 'attributeName',
+                type: 'string',
+                displayOptions: {
+                  show: {
+                    extractionType: [
+                      'attribute',
+                    ],
+                  },
+                },
+                default: '',
+                placeholder: 'e.g. href',
+                description: 'The name of the attribute to extract',
+              },
+              {
+                displayName: 'Item Selector',
+                name: 'itemSelector',
+                type: 'string',
+                default: '',
+                placeholder: 'div.product',
+                description: 'CSS selector for each item container (leave empty if not applicable)',
+              },
+            ],
+          },
+        ],
+        description: 'Selectors for data extraction on each page',
+        required: true,
+      },
+      
+      // Custom Script Configuration
+      {
+        displayName: 'Script',
+        name: 'script',
+        type: 'string',
+        displayOptions: {
+          show: {
+            operation: [
+              'executeScript',
+            ],
+          },
+        },
+        default: '',
+        description: 'JavaScript to execute on the page',
+        typeOptions: {
+          rows: 10,
+        },
+        placeholder: `// Example: Extract all links
+return Array.from(document.querySelectorAll('a')).map(a => {
+  return {
+    text: a.innerText,
+    href: a.href
+  };
+});`,
+        required: true,
+      },
+      
+      // Browser Options
+      {
+        displayName: 'Browser Options',
+        name: 'browserOptions',
+        type: 'collection',
+        placeholder: 'Add Option',
+        default: {},
+        options: [
+          {
+            displayName: 'User Agent',
+            name: 'userAgent',
+            type: 'string',
+            default: '',
+            description: 'Custom user agent string',
+          },
+          {
+            displayName: 'Headless',
+            name: 'headless',
+            type: 'boolean',
+            default: true,
+            description: 'Whether to run browser in headless mode',
+          },
+          {
+            displayName: 'Wait For Selector',
+            name: 'waitForSelector',
+            type: 'string',
+            default: '',
+            description: 'CSS selector to wait for before proceeding',
+            placeholder: 'e.g. div.main-content',
+          },
+          {
+            displayName: 'Timeout',
+            name: 'timeout',
+            type: 'number',
+            default: 30000,
+            description: 'Maximum navigation time in milliseconds',
+          },
+          {
+            displayName: 'Cookies',
+            name: 'cookies',
+            type: 'json',
+            default: '[]',
+            description: 'Cookies to set for the browser session',
+            placeholder: `[
+  {
+    "name": "cookie1",
+    "value": "value1",
+    "domain": "example.com"
+  }
+]`,
+          },
+          {
+            displayName: 'Extra Headers',
+            name: 'extraHeaders',
+            type: 'json',
+            default: '{}',
+            description: 'Additional HTTP headers to send with requests',
+            placeholder: `{
+  "X-Requested-With": "XMLHttpRequest",
+  "Referer": "https://example.com"
+}`,
+          },
+          {
+            displayName: 'Disable JavaScript',
+            name: 'disableJavascript',
+            type: 'boolean',
+            default: false,
+            description: 'Whether to disable JavaScript execution',
+          },
+          {
+            displayName: 'Disable Images',
+            name: 'disableImages',
+            type: 'boolean',
+            default: false,
+            description: 'Whether to disable loading of images',
+          },
+          {
+            displayName: 'Disable Stylesheet',
+            name: 'disableStylesheet',
+            type: 'boolean',
+            default: false,
+            description: 'Whether to disable loading of stylesheet',
+          },
+          {
+            displayName: 'Proxy Server',
+            name: 'proxyServer',
+            type: 'string',
+            default: '',
+            description: 'Proxy server to use for browser requests',
+            placeholder: 'http://proxy.example.com:8080',
+          },
+          {
+            displayName: 'Proxy Authentication',
+            name: 'proxyAuth',
+            type: 'string',
+            default: '',
+            displayOptions: {
+              show: {
+                '/browserOptions.proxyServer': [
+                  /\S+/,
+                ],
+              },
+            },
+            description: 'Proxy authentication credentials in format username:password',
+            typeOptions: {
+              password: true,
+            },
+          },
+          {
+            displayName: 'Data Center Location',
+            name: 'datacenterLocation',
+            type: 'options',
+            options: [
+              {
+                name: 'United States',
+                value: 'us',
+              },
+              {
+                name: 'Europe',
+                value: 'eu',
+              },
+              {
+                name: 'Asia Pacific',
+                value: 'ap',
+              },
+            ],
+            default: 'us',
+            description: 'Data center location to route browser traffic through',
+          },
+          {
+            displayName: 'Detection Evasion Level',
+            name: 'evasionLevel',
+            type: 'options',
+            options: [
+              {
+                name: 'Minimal',
+                value: 'minimal',
+                description: 'Basic fingerprint modification',
+              },
+              {
+                name: 'Standard',
+                value: 'standard',
+                description: 'Comprehensive browser fingerprint masking',
+              },
+              {
+                name: 'Aggressive',
+                value: 'aggressive',
+                description: 'Advanced techniques to avoid detection',
+              },
+            ],
+            default: 'standard',
+            description: 'Level of anti-bot detection techniques to apply',
+          },
+        ],
+      },
+      
+      // Advanced Options
+      {
+        displayName: 'Advanced Options',
+        name: 'advancedOptions',
+        type: 'collection',
+        placeholder: 'Add Option',
+        default: {},
+        options: [
+          {
+            displayName: 'Retry On Failure',
+            name: 'retryOnFailure',
+            type: 'boolean',
+            default: true,
+            description: 'Whether to retry on scraping failure',
+          },
+          {
+            displayName: 'Max Retries',
+            name: 'maxRetries',
+            type: 'number',
+            displayOptions: {
+              show: {
+                retryOnFailure: [
+                  true,
+                ],
+              },
+            },
+            default: 3,
+            description: 'Maximum number of retry attempts',
+          },
+          {
+            displayName: 'Retry Delay',
+            name: 'retryDelay',
+            type: 'number',
+            displayOptions: {
+              show: {
+                retryOnFailure: [
+                  true,
+                ],
+              },
+            },
+            default: 5000,
+            description: 'Delay between retry attempts in milliseconds',
+          },
+          {
+            displayName: 'Random Delay Before Scraping',
+            name: 'randomDelay',
+            type: 'boolean',
+            default: false,
+            description: 'Whether to add a random delay before scraping to appear more human-like',
+          },
+          {
+            displayName: 'Min Delay',
+            name: 'minDelay',
+            type: 'number',
+            displayOptions: {
+              show: {
+                randomDelay: [
+                  true,
+                ],
+              },
+            },
+            default: 1000,
+            description: 'Minimum delay in milliseconds',
+          },
+          {
+            displayName: 'Max Delay',
+            name: 'maxDelay',
+            type: 'number',
+            displayOptions: {
+              show: {
+                randomDelay: [
+                  true,
+                ],
+              },
+            },
+            default: 5000,
+            description: 'Maximum delay in milliseconds',
+          },
+          {
+            displayName: 'Cache Results',
+            name: 'cacheResults',
+            type: 'boolean',
+            default: false,
+            description: 'Whether to cache results to reduce redundant scraping',
+          },
+          {
+            displayName: 'Cache TTL',
+            name: 'cacheTtl',
+            type: 'number',
+            displayOptions: {
+              show: {
+                cacheResults: [
+                  true,
+                ],
+              },
+            },
+            default: 3600,
+            description: 'Time to live for the cache in seconds',
+          },
+          {
+            displayName: 'Scroll Behavior',
+            name: 'scrollBehavior',
+            type: 'options',
+            options: [
+              {
+                name: 'None',
+                value: 'none',
+                description: 'Do not scroll the page',
+              },
+              {
+                name: 'To Bottom',
+                value: 'toBottom',
+                description: 'Scroll to bottom once',
+              },
+              {
+                name: 'Incremental',
+                value: 'incremental',
+                description: 'Scroll in increments with pauses',
+              },
+              {
+                name: 'Dynamic',
+                value: 'dynamic',
+                description: 'Scroll until no new content is loaded',
+              },
+            ],
+            default: 'none',
+            description: 'How to scroll the page during scraping',
+          },
+          {
+            displayName: 'Data Post-Processing Script',
+            name: 'postProcessingScript',
+            type: 'string',
+            default: '',
+            description: 'JavaScript to run on the extracted data after scraping',
+            typeOptions: {
+              rows: 4,
+            },
+            placeholder: `// Example: Transform data
+return data.map(item => {
+  item.title = item.title ? item.title.trim() : '';
+  return item;
+});`,
+          },
+        ],
+      },
+    ],
+  };
+
+  /**
+   * Execute the node functionality
+   */
+  async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
+    const items = this.getInputData();
+    const returnData: INodeExecutionData[] = [];
+
+    // Initialize Puppeteer with plugins
+    puppeteerExtra.use(StealthPlugin());
+    puppeteerExtra.use(AdblockerPlugin({ blockTrackers: true }));
+
+    let browser: Browser | null = null;
+
+    try {
+      // Process each item
+      for (let i = 0; i < items.length; i++) {
+        const operation = this.getNodeParameter('operation', i) as string;
+        const url = this.getNodeParameter('url', i) as string;
+        const browserOptions = this.getNodeParameter('browserOptions', i, {}) as {
+          userAgent?: string;
+          headless?: boolean;
+          waitForSelector?: string;
+          timeout?: number;
+          cookies?: string;
+          extraHeaders?: string;
+          disableJavascript?: boolean;
+          disableImages?: boolean;
+          disableStylesheet?: boolean;
+          proxyServer?: string;
+          proxyAuth?: string;
+          evasionLevel?: 'minimal' | 'standard' | 'aggressive';
+        };
+        const advancedOptions = this.getNodeParameter('advancedOptions', i, {}) as {
+          retryOnFailure?: boolean;
+          maxRetries?: number;
+          retryDelay?: number;
+          randomDelay?: boolean;
+          minDelay?: number;
+          maxDelay?: number;
+          cacheResults?: boolean;
+          cacheTtl?: number;
+          scrollBehavior?: 'none' | 'toBottom' | 'incremental' | 'dynamic';
+          postProcessingScript?: string;
+        };
+
+        // Configure browser launch options
+        const launchOptions: any = {
+          headless: browserOptions.headless !== false,
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--disable-gpu',
+          ],
+          ignoreHTTPSErrors: true,
+        };
+
+        if (browserOptions.userAgent) {
+          launchOptions.userAgent = browserOptions.userAgent;
+        }
+
+        // Add proxy configuration if provided
+        if (browserOptions.proxyServer) {
+          launchOptions.args.push(`--proxy-server=${browserOptions.proxyServer}`);
+        }
+
+        // Configure for evasion level
+        if (browserOptions.evasionLevel === 'aggressive') {
+          launchOptions.args.push(
+            '--disable-blink-features=AutomationControlled',
+            '--disable-features=IsolateOrigins,site-per-process',
+          );
+        }
+
+        // Launch browser
+        browser = await puppeteerExtra.launch(launchOptions);
+        
+        // Create new incognito context
+        const context = await browser.createIncognitoBrowserContext();
+        const page = await context.newPage();
+
+        // Set extra headers if provided
+        if (browserOptions.extraHeaders) {
+          try {
+            const headers = JSON.parse(browserOptions.extraHeaders);
+            await page.setExtraHTTPHeaders(headers);
+          } catch (error) {
+            throw new NodeOperationError(this.getNode(), 'Invalid extra headers JSON');
+          }
+        }
+
+        // Set cookies if provided
+        if (browserOptions.cookies) {
+          try {
+            const cookies = JSON.parse(browserOptions.cookies);
+            await page.setCookie(...cookies);
+          } catch (error) {
+            throw new NodeOperationError(this.getNode(), 'Invalid cookies JSON');
+          }
+        }
+
+        // Set request interception for resource blocking
+        await page.setRequestInterception(true);
+        page.on('request', (request) => {
+          const resourceType = request.resourceType();
+          let shouldBlock = false;
+
+          if (
+            (browserOptions.disableImages && resourceType === 'image') ||
+            (browserOptions.disableStylesheet && resourceType === 'stylesheet') ||
+            (browserOptions.disableJavascript && resourceType === 'script')
+          ) {
+            shouldBlock = true;
+          }
+
+          if (shouldBlock) {
+            request.abort();
+          } else {
+            request.continue();
+          }
+        });
+
+        // Handle authentication if needed
+        const authentication = this.getNodeParameter('authentication', i, {}) as {
+          loginRequired?: boolean;
+          loginUrl?: string;
+          usernameSelector?: string;
+          passwordSelector?: string;
+          submitSelector?: string;
+          username?: string;
+          password?: string;
+        };
+
+        if (authentication.loginRequired) {
+          // Navigate to login page
+          await page.goto(authentication.loginUrl || url, {
+            waitUntil: 'networkidle2',
+            timeout: browserOptions.timeout || 30000,
+          });
+
+          // Fill username
+          await page.waitForSelector(authentication.usernameSelector as string);
+          await page.type(authentication.usernameSelector as string, authentication.username as string);
+
+          // Fill password
+          await page.waitForSelector(authentication.passwordSelector as string);
+          await page.type(authentication.passwordSelector as string, authentication.password as string);
+
+          // Submit form
+          await page.waitForSelector(authentication.submitSelector as string);
+          await Promise.all([
+            page.waitForNavigation({ waitUntil: 'networkidle2' }),
+            page.click(authentication.submitSelector as string),
+          ]);
+        }
+
+        // Add random delay before scraping if configured
+        if (advancedOptions.randomDelay) {
+          const minDelay = advancedOptions.minDelay || 1000;
+          const maxDelay = advancedOptions.maxDelay || 5000;
+          const delay = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+
+        // Navigate to the URL
+        await page.goto(url, {
+          waitUntil: 'networkidle2',
+          timeout: browserOptions.timeout || 30000,
+        });
+
+        // Wait for selector if provided
+        if (browserOptions.waitForSelector) {
+          await page.waitForSelector(browserOptions.waitForSelector, {
+            timeout: browserOptions.timeout || 30000,
+          });
+        }
+
+        // Handle scrolling behavior
+        if (advancedOptions.scrollBehavior !== 'none') {
+          switch (advancedOptions.scrollBehavior) {
+            case 'toBottom':
+              await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+              await page.waitForTimeout(1000);
+              break;
+            case 'incremental':
+              await page.evaluate(async () => {
+                const scrollHeight = document.body.scrollHeight;
+                const viewportHeight = window.innerHeight;
+                const steps = 10;
+                const stepSize = scrollHeight / steps;
+                
+                for (let i = 1; i <= steps; i++) {
+                  window.scrollTo(0, stepSize * i);
+                  // Add a small delay between scrolls
+                  await new Promise(resolve => setTimeout(resolve, 300));
+                }
+              });
+              break;
+            case 'dynamic':
+              await page.evaluate(async () => {
+                let lastHeight = document.body.scrollHeight;
+                let scrollAttempts = 0;
+                const maxScrollAttempts = 20;
+                
+                while (scrollAttempts < maxScrollAttempts) {
+                  window.scrollTo(0, document.body.scrollHeight);
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                  
+                  const newHeight = document.body.scrollHeight;
+                  if (newHeight === lastHeight) {
+                    break;
+                  }
+                  lastHeight = newHeight;
+                  scrollAttempts++;
+                }
+              });
+              break;
+          }
+        }
+
+        // Execute operation-specific logic
+        let result: any;
+        
+        if (operation === 'scrapePage') {
+          result = await this.scrapePage(page, i);
+        } else if (operation === 'scrapeTable') {
+          result = await this.scrapeTable(page, i);
+        } else if (operation === 'screenshot') {
+          result = await this.takeScreenshot(page, i);
+        } else if (operation === 'pdf') {
+          result = await this.generatePdf(page, i);
+        } else if (operation === 'pagination') {
+          result = await this.scrapePagination(page, i);
+        } else if (operation === 'executeScript') {
+          result = await this.executeScript(page, i);
+        } else {
+          throw new NodeOperationError(this.getNode(), `The operation "${operation}" is not implemented yet`);
+        }
+
+        // Apply post-processing if configured
+        if (advancedOptions.postProcessingScript && result.data) {
+          try {
+            const script = advancedOptions.postProcessingScript;
+            const data = result.data;
+            const postProcessFunction = new Function('data', script);
+            result.data = postProcessFunction(data);
+          } catch (error) {
+            result.postProcessingError = error.message;
+          }
+        }
+
+        // Add metadata to result
+        result.url = url;
+        result.timestamp = new Date().toISOString();
+        result.operation = operation;
+
+        // Add result to return data
+        returnData.push({
+          json: result,
+          ...(result.binary ? { binary: result.binary } : {}),
+        });
+      }
+    } catch (error) {
+      if (this.continueOnFail()) {
+        returnData.push({
+          json: {
+            error: error.message,
+          },
+        });
+      } else {
+        throw error;
+      }
+    } finally {
+      // Close browser if it was opened
+      if (browser !== null) {
+        await browser.close();
+      }
+    }
+
+    return [returnData];
+  }
+
+  /**
+   * Scrape a page using selectors
+   */
+  private async scrapePage(page: Page, itemIndex: number): Promise<any> {
+    const selectors = this.getNodeParameter('selectors', itemIndex, { values: [] }) as {
+      values: {
+        fieldName: string;
+        selector: string;
+        extractionType: 'text' | 'html' | 'attribute';
+        attributeName?: string;
+        multiple: boolean;
+      }[];
+    };
+
+    const result: { [key: string]: any } = {
+      data: {},
+    };
+
+    // Extract data for each selector
+    for (const selectorConfig of selectors.values) {
+      const { fieldName, selector, extractionType, attributeName, multiple } = selectorConfig;
+      
+      let extractedData;
+      
+      if (multiple) {
+        // Extract data from multiple elements
+        extractedData = await page.evaluate(
+          (selector, extractionType, attributeName) => {
+            const elements = Array.from(document.querySelectorAll(selector));
+            
+            return elements.map(element => {
+              if (extractionType === 'text') {
+                return element.textContent?.trim() || '';
+              } else if (extractionType === 'html') {
+                return element.innerHTML || '';
+              } else if (extractionType === 'attribute' && attributeName) {
+                return element.getAttribute(attributeName) || '';
+              }
+              return '';
+            });
+          },
+          selector,
+          extractionType,
+          attributeName
+        );
+      } else {
+        // Extract data from a single element
+        extractedData = await page.evaluate(
+          (selector, extractionType, attributeName) => {
+            const element = document.querySelector(selector);
+            
+            if (!element) return null;
+            
+            if (extractionType === 'text') {
+              return element.textContent?.trim() || '';
+            } else if (extractionType === 'html') {
+              return element.innerHTML || '';
+            } else if (extractionType === 'attribute' && attributeName) {
+              return element.getAttribute(attributeName) || '';
+            }
+            return '';
+          },
+          selector,
+          extractionType,
+          attributeName
+        );
+      }
+      
+      result.data[fieldName] = extractedData;
+    }

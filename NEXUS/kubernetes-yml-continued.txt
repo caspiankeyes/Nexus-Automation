@@ -1,0 +1,263 @@
+path: /healthz
+            port: 5678
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: n8n-data
+          mountPath: /home/node/.n8n
+        - name: custom-nodes
+          mountPath: /custom-nodes
+      volumes:
+      - name: n8n-data
+        persistentVolumeClaim:
+          claimName: nexus-n8n-data
+      - name: custom-nodes
+        configMap:
+          name: nexus-n8n-custom-nodes
+
+---
+# n8n Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexus-n8n-service
+  namespace: nexus-n8n
+  labels:
+    app: nexus-n8n
+    component: n8n
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5678
+    targetPort: 5678
+    protocol: TCP
+    name: http
+  selector:
+    app: nexus-n8n
+    component: n8n
+
+---
+# ConfigMap for custom nodes
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nexus-n8n-custom-nodes
+  namespace: nexus-n8n
+data:
+  # Custom node files will be added here in a real implementation
+  # For example:
+  # "openai_node.ts": |
+  #   // Node content goes here
+
+---
+# Ingress for n8n
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nexus-n8n-ingress
+  namespace: nexus-n8n
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "8k"
+spec:
+  tls:
+  - hosts:
+    - n8n.example.com  # Change to your domain
+    secretName: nexus-n8n-tls
+  rules:
+  - host: n8n.example.com  # Change to your domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nexus-n8n-service
+            port:
+              number: 5678
+
+---
+# Horizontal Pod Autoscaler for n8n
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nexus-n8n-hpa
+  namespace: nexus-n8n
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nexus-n8n
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+---
+# Prometheus ServiceMonitor for n8n metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nexus-n8n-servicemonitor
+  namespace: nexus-n8n
+  labels:
+    app: nexus-n8n
+spec:
+  selector:
+    matchLabels:
+      app: nexus-n8n
+      component: n8n
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 15s
+  namespaceSelector:
+    matchNames:
+    - nexus-n8n
+
+---
+# CronJob for database backup
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nexus-n8n-db-backup
+  namespace: nexus-n8n
+spec:
+  schedule: "0 2 * * *" # Every day at 2 AM
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: db-backup
+            image: postgres:15-alpine
+            command:
+            - /bin/sh
+            - -c
+            - |
+              pg_dump -h nexus-n8n-postgres -U "$PGUSER" -d "$PGDATABASE" -Fc | gzip > /backups/n8n-db-$(date +%Y%m%d-%H%M%S).gz
+            env:
+            - name: PGUSER
+              valueFrom:
+                configMapKeyRef:
+                  name: nexus-n8n-config
+                  key: DB_POSTGRESDB_USER
+            - name: PGDATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: nexus-n8n-config
+                  key: DB_POSTGRESDB_DATABASE
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nexus-n8n-secrets
+                  key: DB_POSTGRESDB_PASSWORD
+            volumeMounts:
+            - name: backup-data
+              mountPath: /backups
+          restartPolicy: OnFailure
+          volumes:
+          - name: backup-data
+            persistentVolumeClaim:
+              claimName: nexus-n8n-backups
+
+---
+# PVC for database backups
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nexus-n8n-backups
+  namespace: nexus-n8n
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+# Network Policy for n8n
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nexus-n8n-network-policy
+  namespace: nexus-n8n
+spec:
+  podSelector:
+    matchLabels:
+      app: nexus-n8n
+      component: n8n
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 5678
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: nexus-n8n
+          component: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  - to:
+    - podSelector:
+        matchLabels:
+          app: nexus-n8n
+          component: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  - to:
+    - namespaceSelector: {}
+      podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+    ports:
+    - protocol: TCP
+      port: 443

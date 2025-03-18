@@ -1,0 +1,263 @@
+{
+  "name": "Intelligent Email Summarization & Prioritization",
+  "nodes": [
+    {
+      "parameters": {
+        "protocol": "imap",
+        "mailbox": "INBOX",
+        "options": {
+          "emailsPerRun": 10,
+          "onlyRead": false,
+          "unseen": true,
+          "download": true,
+          "limit": 10
+        }
+      },
+      "name": "Email Trigger",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "id": "12a76eb6-d7a0-4af8-8b8d-01a8bf0c1c73",
+      "credentials": {
+        "imap": {
+          "id": "Email IMAP Account",
+          "name": "IMAP Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "classification",
+        "document": "={{$json[\"text\"]}}",
+        "classes": ["Support", "Sales", "Complaint", "Information", "Urgent", "Other"],
+        "model": "langchain/text-classifier",
+        "temperature": 0.1,
+        "outputFormat": "json",
+        "returnFullResponse": true
+      },
+      "name": "Email Analyzer",
+      "type": "nexus-nodes.langchain",
+      "typeVersion": 1,
+      "position": [
+        480,
+        300
+      ],
+      "id": "6c6e8a17-d731-4c5f-8ab4-04d56a3a4e3a"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract data from previous nodes\nconst email = $input.item(0).json;\nconst analysis = $input.item(0).json.result;\n\n// Priority calculation algorithm\nconst calculatePriority = (email, analysis) => {\n  let score = 0;\n  \n  // Base priority by category\n  const categoryScores = {\n    'Urgent': 100,\n    'Complaint': 80,\n    'Support': 70,\n    'Sales': 60,\n    'Information': 40,\n    'Other': 30\n  };\n  \n  score += categoryScores[analysis.category] || 0;\n  \n  // Sender domain priority\n  const senderDomain = email.from.split('@')[1];\n  const vipDomains = ['importantclient.com', 'bigcustomer.org', 'partner.net'];\n  if (vipDomains.some(domain => senderDomain && senderDomain.includes(domain))) {\n    score += 30;\n  }\n  \n  // Keyword detection\n  const urgentKeywords = ['urgent', 'asap', 'emergency', 'immediately', 'critical'];\n  const emailText = email.text.toLowerCase();\n  if (urgentKeywords.some(keyword => emailText.includes(keyword))) {\n    score += 20;\n  }\n  \n  // Time-based priority (older emails get higher priority)\n  const now = new Date();\n  const emailDate = new Date(email.date);\n  const hoursSinceReceived = (now - emailDate) / (1000 * 60 * 60);\n  if (hoursSinceReceived > 24) {\n    score += 15; // Over 24 hours old\n  } else if (hoursSinceReceived > 8) {\n    score += 10; // Over 8 hours old\n  }\n  \n  // CC count - more people copied means potentially more important\n  const ccCount = email.cc ? email.cc.split(',').length : 0;\n  score += Math.min(ccCount * 2, 10);\n  \n  // Normalize score to 0-100\n  return Math.min(Math.max(score, 0), 100);\n};\n\n// Calculate email priority\nconst priority = calculatePriority(email, analysis);\nlet priorityLabel;\n\nif (priority >= 80) {\n  priorityLabel = 'High';\n} else if (priority >= 50) {\n  priorityLabel = 'Medium';\n} else {\n  priorityLabel = 'Low';\n}\n\n// Add sentiment analysis extract\nlet sentiment = 'Neutral';\nif (analysis.sentiment) {\n  sentiment = analysis.sentiment;\n} else {\n  // Simple keyword-based sentiment analysis as fallback\n  const text = email.text.toLowerCase();\n  const positiveWords = ['happy', 'pleased', 'great', 'excellent', 'thank', 'appreciate'];\n  const negativeWords = ['disappointed', 'issue', 'problem', 'complaint', 'unhappy', 'refund'];\n  \n  const positiveCount = positiveWords.filter(word => text.includes(word)).length;\n  const negativeCount = negativeWords.filter(word => text.includes(word)).length;\n  \n  if (positiveCount > negativeCount) {\n    sentiment = 'Positive';\n  } else if (negativeCount > positiveCount) {\n    sentiment = 'Negative';\n  }\n}\n\n// Return enhanced data\nreturn {\n  json: {\n    ...email,\n    analysis: analysis,\n    priority: {\n      score: priority,\n      label: priorityLabel\n    },\n    sentiment: sentiment,\n    processingTime: new Date().toISOString(),\n    extractedEntities: analysis.entities || [],\n    requiresResponse: priority >= 50 || sentiment === 'Negative'\n  }\n};"
+      },
+      "name": "Priority Calculator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        700,
+        300
+      ],
+      "id": "9e8b1c6f-67df-46f9-a2e7-76cfdce27e12"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"priority\"][\"label\"]}}",
+              "operation": "equal",
+              "value2": "High"
+            }
+          ]
+        }
+      },
+      "name": "High Priority?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        920,
+        300
+      ],
+      "id": "5c3a95bb-fcbe-4ab9-b0ab-ecedba23c069"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"priority\"][\"label\"]}}",
+              "operation": "equal",
+              "value2": "Medium"
+            }
+          ]
+        }
+      },
+      "name": "Medium Priority?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        920,
+        500
+      ],
+      "id": "8d44cfc9-61e0-4f41-8986-5d0e34de5a45"
+    },
+    {
+      "parameters": {
+        "operation": "chat",
+        "model": "gpt-4",
+        "messages": {
+          "values": [
+            {
+              "type": "selectOption",
+              "messageType": "system",
+              "message": "You are an executive assistant helping to summarize emails and extract the most important information. Create concise, accurate summaries that capture the key points, action items, and deadlines."
+            },
+            {
+              "type": "selectOption",
+              "messageType": "user",
+              "message": "=Create a concise summary of this email. Extract any action items, deadlines, or important details. Format the response as JSON with these keys: 'summary' (1-2 sentence overview), 'actionItems' (array of specific actions required), 'deadlines' (array of dates mentioned with context), 'keyPoints' (array of important details).\n\nEMAIL:\nFrom: {{$json[\"from\"]}}\nTo: {{$json[\"to\"]}}\nSubject: {{$json[\"subject\"]}}\nCategory: {{$json[\"analysis\"][\"category\"]}}\n\n{{$json[\"text\"]}}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.3
+        },
+        "additionalOptions": {
+          "responseFormat": "json_object"
+        }
+      },
+      "name": "Email Summarizer",
+      "type": "nexus-nodes.openai",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        300
+      ],
+      "id": "18c4e7b2-f9ce-438d-b9a3-33c16042dc3e"
+    },
+    {
+      "parameters": {
+        "entityType": "email",
+        "fieldMappings": {
+          "summary": "={{$json[\"choices\"][0][\"message\"][\"content\"][\"summary\"]}}",
+          "priority": "={{$json[\"priority\"][\"label\"]}}",
+          "category": "={{$json[\"analysis\"][\"category\"]}}",
+          "sentiment": "={{$json[\"sentiment\"]}}",
+          "actionItems": "={{$json[\"choices\"][0][\"message\"][\"content\"][\"actionItems\"]}}",
+          "deadlines": "={{$json[\"choices\"][0][\"message\"][\"content\"][\"deadlines\"]}}"
+        }
+      },
+      "name": "CRM Integration",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        300
+      ],
+      "id": "4fcb30d2-bbd1-4e2d-b52c-82e0b31b4c33",
+      "credentials": {
+        "hubspotApi": {
+          "id": "HubSpot API",
+          "name": "HubSpot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "chat",
+        "model": "gpt-3.5-turbo",
+        "messages": {
+          "values": [
+            {
+              "type": "selectOption",
+              "messageType": "system",
+              "message": "You are a professional customer service representative. Generate appropriate response drafts to customer emails. Be helpful, concise, and professional."
+            },
+            {
+              "type": "selectOption",
+              "messageType": "user",
+              "message": "=Draft a professional response to this email. The response should acknowledge their message, address their concerns, and provide the next steps. The customer's email category is: {{$json[\"analysis\"][\"category\"]}}. Their sentiment appears to be: {{$json[\"sentiment\"]}}.\n\nEMAIL CONTENT:\n{{$json[\"text\"]}}\n\nDo not include any placeholders like [INSERT NAME]. Create a complete, ready-to-send response that requires minimal editing."
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.5
+        }
+      },
+      "name": "Response Generator",
+      "type": "nexus-nodes.openai",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        500
+      ],
+      "id": "ba5a6c90-93d2-4b2f-ba45-d4c56c3a57f4"
+    },
+    {
+      "parameters": {
+        "channel": "email-alerts",
+        "text": "=🚨 *HIGH PRIORITY EMAIL RECEIVED* 🚨\n\n*From:* {{$json[\"from\"]}}\n*Subject:* {{$json[\"subject\"]}}\n*Category:* {{$json[\"analysis\"][\"category\"]}}\n*Priority:* {{$json[\"priority\"][\"label\"]}} ({{$json[\"priority\"][\"score\"]}})\n*Sentiment:* {{$json[\"sentiment\"]}}\n\n*Summary:*\n{{$json[\"choices\"][0][\"message\"][\"content\"][\"summary\"]}}\n\n*Action Items:*\n{{$json[\"choices\"][0][\"message\"][\"content\"][\"actionItems\"].join('\\n')}}\n\n*Deadlines:*\n{{$json[\"choices\"][0][\"message\"][\"content\"][\"deadlines\"].join('\\n')}}\n\n*Suggested Response:*\n```\n{{$node[\"Response Generator\"].json[\"choices\"][0][\"message\"][\"content\"]}}\n```",
+        "attachments": "=[]",
+        "otherOptions": {
+          "threadTs": ""
+        }
+      },
+      "name": "Slack Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        100
+      ],
+      "id": "b2a76e9b-d820-4a0f-8edb-01b7bf0c1c75",
+      "credentials": {
+        "slackApi": {
+          "id": "Slack",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": "={{$json[\"gdrive_folder_id\"]}}",
+        "options": {}
+      },
+      "name": "Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        500
+      ],
+      "id": "ae2c9ef5-49f5-4bbd-b421-e2d55ef9d1e2",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Google Drive",
+          "name": "Google Drive API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sheetId": "={{$json[\"tracking_spreadsheet_id\"]}}",
+        "options": {}
+      },
+      "name": "Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [
+        1580,
+        400
+      ],
+      "id": "67be94f1-afa5-40e0-ac05-2c0451a1b03e",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Google Sheets",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare config data for different systems\nconst systemConfig = {\n  // CRM system info\n  hubspot: {\n    enabled: true\n  },\n  // Google workspace integration\n  googleWorkspace: {\n    enabled: true,\n    gdrive_folder_id: '1a2b3c4d5e6f7g8h9i0j',\n    tracking_spreadsheet_id: '1a2b3c4d5e6f7g8h9i0jABCDEFGHIJKLM'\n  

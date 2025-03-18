@@ -1,0 +1,420 @@
+import {
+  IExecuteFunctions,
+  INodeExecutionData,
+  INodeType,
+  INodeTypeDescription,
+  NodeOperationError,
+} from 'n8n-workflow';
+
+import { OpenAI } from 'langchain/llms/openai';
+import { ChatOpenAI } from 'langchain/chat_models/openai';
+import { PromptTemplate } from 'langchain/prompts';
+import { LLMChain } from 'langchain/chains';
+import { 
+  ConversationalRetrievalQAChain, 
+  RetrievalQAChain, 
+  VectorDBQAChain,
+  SqlDatabaseChain,
+  StructuredOutputChain
+} from 'langchain/chains';
+import { 
+  RecursiveCharacterTextSplitter,
+  CharacterTextSplitter,
+  TokenTextSplitter
+} from 'langchain/text_splitter';
+import { HNSWLib } from 'langchain/vectorstores/hnswlib';
+import { OpenAIEmbeddings } from 'langchain/embeddings/openai';
+import { CheerioWebBaseLoader } from 'langchain/document_loaders/web/cheerio';
+import { JSONLoader } from 'langchain/document_loaders/json';
+import { TextLoader } from 'langchain/document_loaders/text';
+import { CSVLoader } from 'langchain/document_loaders/csv';
+import { PDFLoader } from 'langchain/document_loaders/pdf';
+import { Calculator } from 'langchain/tools/calculator';
+import { WebBrowser } from 'langchain/tools/webbrowser';
+import { z } from 'zod';
+import { StructuredOutputParser } from 'langchain/output_parsers';
+import { Document } from 'langchain/document';
+import { BufferMemory } from 'langchain/memory';
+
+/**
+ * Enhanced LangChain Node for n8n providing advanced LLM chain operations
+ * and document processing capabilities
+ */
+export class LangChainNode implements INodeType {
+  description: INodeTypeDescription = {
+    displayName: 'LangChain',
+    name: 'langChain',
+    group: ['transform'],
+    version: 1,
+    subtitle: '={{$parameter["operation"]}}',
+    description: 'Execute LangChain operations with advanced LLM workflows',
+    defaults: {
+      name: 'LangChain',
+    },
+    inputs: ['main'],
+    outputs: ['main'],
+    credentials: [
+      {
+        name: 'openAiApi',
+        required: true,
+      },
+    ],
+    properties: [
+      // Operation Selection
+      {
+        displayName: 'Operation',
+        name: 'operation',
+        type: 'options',
+        noDataExpression: true,
+        options: [
+          {
+            name: 'Simple Chain',
+            value: 'simpleChain',
+            description: 'Execute a simple LLM chain with a prompt template',
+            action: 'Execute a simple LLM chain with a prompt template',
+          },
+          {
+            name: 'QA Chain',
+            value: 'qaChain',
+            description: 'Question answering over documents',
+            action: 'Execute a question answering chain over documents',
+          },
+          {
+            name: 'Retrieval QA',
+            value: 'retrievalQA',
+            description: 'Retrieval-based question answering',
+            action: 'Execute a retrieval-based question answering chain',
+          },
+          {
+            name: 'Classification',
+            value: 'classification',
+            description: 'Classify text into categories',
+            action: 'Classify text into predefined categories',
+          },
+          {
+            name: 'Extract Structured',
+            value: 'extractStructured',
+            description: 'Extract structured data from text',
+            action: 'Extract structured data from text',
+          },
+          {
+            name: 'Summarization',
+            value: 'summarization',
+            description: 'Summarize documents',
+            action: 'Generate a summary of documents',
+          },
+          {
+            name: 'Web Scraping',
+            value: 'webScraping',
+            description: 'Extract information from websites',
+            action: 'Extract information from websites',
+          },
+        ],
+        default: 'simpleChain',
+      },
+      
+      // Model Configuration
+      {
+        displayName: 'Model',
+        name: 'model',
+        type: 'string',
+        default: 'gpt-3.5-turbo',
+        required: true,
+        description: 'The language model to use for the operation',
+      },
+      {
+        displayName: 'Temperature',
+        name: 'temperature',
+        type: 'number',
+        default: 0.7,
+        description: 'The temperature of the model. Higher values mean more creative output.',
+        typeOptions: {
+          minValue: 0,
+          maxValue: 2,
+          stepSize: 0.1,
+        },
+      },
+      
+      // Simple Chain Configuration
+      {
+        displayName: 'Prompt Template',
+        name: 'promptTemplate',
+        type: 'string',
+        displayOptions: {
+          show: {
+            operation: [
+              'simpleChain',
+            ],
+          },
+        },
+        default: '',
+        placeholder: 'Enter your prompt template with {input_variables}',
+        description: 'The prompt template with input variables in curly braces',
+        typeOptions: {
+          rows: 4,
+        },
+        required: true,
+      },
+      {
+        displayName: 'Input Variables',
+        name: 'inputVariables',
+        placeholder: 'Add Input Variable',
+        type: 'fixedCollection',
+        typeOptions: {
+          multipleValues: true,
+        },
+        displayOptions: {
+          show: {
+            operation: [
+              'simpleChain',
+            ],
+          },
+        },
+        default: {},
+        options: [
+          {
+            name: 'variables',
+            displayName: 'Variable',
+            values: [
+              {
+                displayName: 'Name',
+                name: 'name',
+                type: 'string',
+                default: '',
+                description: 'Name of the variable',
+                placeholder: 'e.g., query',
+                required: true,
+              },
+              {
+                displayName: 'Value',
+                name: 'value',
+                type: 'string',
+                default: '',
+                description: 'Value of the variable',
+                placeholder: 'e.g., How does photosynthesis work?',
+                required: true,
+              },
+            ],
+          },
+        ],
+        required: true,
+      },
+      
+      // QA Chain Configuration
+      {
+        displayName: 'Question',
+        name: 'question',
+        type: 'string',
+        displayOptions: {
+          show: {
+            operation: [
+              'qaChain',
+              'retrievalQA',
+            ],
+          },
+        },
+        default: '',
+        placeholder: 'Enter the question to answer',
+        description: 'The question to answer based on the provided documents',
+        required: true,
+      },
+      {
+        displayName: 'Documents',
+        name: 'documents',
+        type: 'string',
+        displayOptions: {
+          show: {
+            operation: [
+              'qaChain',
+            ],
+          },
+        },
+        default: '',
+        placeholder: 'Enter the document text or reference a JSON array of document objects',
+        description: 'The documents to use for answering the question',
+        typeOptions: {
+          rows: 4,
+        },
+        required: true,
+      },
+      
+      // Retrieval QA Configuration
+      {
+        displayName: 'Retrieval Source',
+        name: 'retrievalSource',
+        type: 'options',
+        displayOptions: {
+          show: {
+            operation: [
+              'retrievalQA',
+            ],
+          },
+        },
+        options: [
+          {
+            name: 'Document Text',
+            value: 'text',
+            description: 'Directly provide document text',
+          },
+          {
+            name: 'Web URL',
+            value: 'webUrl',
+            description: 'Load document from a web URL',
+          },
+          {
+            name: 'File Path',
+            value: 'filePath',
+            description: 'Load document from a file path',
+          },
+        ],
+        default: 'text',
+        description: 'The source of the documents for retrieval',
+      },
+      {
+        displayName: 'Document Content',
+        name: 'documentContent',
+        type: 'string',
+        displayOptions: {
+          show: {
+            operation: [
+              'retrievalQA',
+            ],
+            retrievalSource: [
+              'text',
+            ],
+          },
+        },
+        default: '',
+        placeholder: 'Enter the document content',
+        description: 'The text content of the documents',
+        typeOptions: {
+          rows: 4,
+        },
+        required: true,
+      },
+      {
+        displayName: 'URL',
+        name: 'url',
+        type: 'string',
+        displayOptions: {
+          show: {
+            operation: [
+              'retrievalQA',
+            ],
+            retrievalSource: [
+              'webUrl',
+            ],
+          },
+        },
+        default: '',
+        placeholder: 'https://example.com',
+        description: 'The URL to scrape for document content',
+        required: true,
+      },
+      {
+        displayName: 'File Path',
+        name: 'filePath',
+        type: 'string',
+        displayOptions: {
+          show: {
+            operation: [
+              'retrievalQA',
+            ],
+            retrievalSource: [
+              'filePath',
+            ],
+          },
+        },
+        default: '',
+        placeholder: '/path/to/file.pdf',
+        description: 'Path to the file to load as a document',
+        required: true,
+      },
+      
+      // Classification Configuration
+      {
+        displayName: 'Document',
+        name: 'document',
+        type: 'string',
+        displayOptions: {
+          show: {
+            operation: [
+              'classification',
+            ],
+          },
+        },
+        default: '',
+        placeholder: 'Enter the text to classify',
+        description: 'The text to classify into categories',
+        typeOptions: {
+          rows: 4,
+        },
+        required: true,
+      },
+      {
+        displayName: 'Classes',
+        name: 'classes',
+        type: 'string',
+        displayOptions: {
+          show: {
+            operation: [
+              'classification',
+            ],
+          },
+        },
+        default: '',
+        placeholder: 'Positive, Negative, Neutral',
+        description: 'Comma-separated list of classification categories',
+        required: true,
+      },
+      
+      // Extract Structured Configuration
+      {
+        displayName: 'Document',
+        name: 'document',
+        type: 'string',
+        displayOptions: {
+          show: {
+            operation: [
+              'extractStructured',
+            ],
+          },
+        },
+        default: '',
+        placeholder: 'Enter the text to extract data from',
+        description: 'The text to extract structured data from',
+        typeOptions: {
+          rows: 4,
+        },
+        required: true,
+      },
+      {
+        displayName: 'Schema',
+        name: 'schema',
+        type: 'json',
+        displayOptions: {
+          show: {
+            operation: [
+              'extractStructured',
+            ],
+          },
+        },
+        default: '{\n  "name": "string",\n  "age": "number",\n  "email": "string"\n}',
+        placeholder: 'Enter the schema as JSON',
+        description: 'JSON schema describing the structure to extract',
+        required: true,
+      },
+      {
+        displayName: 'Extraction Prompt',
+        name: 'extractionPrompt',
+        type: 'string',
+        displayOptions: {
+          show: {
+            operation: [
+              'extractStructured',
+            ],
+          },
+        },
+        default: '',
+        placeholder: 'Extract the following fields from the text...',
+        description: 'Optional prompt to guide the extraction process',
