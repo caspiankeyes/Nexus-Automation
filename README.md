@@ -952,7 +952,7 @@ Nexus aims to establish the definitive framework for AI-powered workflow automat
 
 ## 📜 License
 
-Nexus is released under the MIT License. See [LICENSE](LICENSE) for details.
+Nexus is released under the AGPL-3.0 License. See [LICENSE](LICENSE) for details.
 
 ---
 
