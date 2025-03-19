@@ -1,8 +1,8 @@
 # Nexus: An Enterprise Framework for AI-Powered Workflow Automation
 
 **Authors**: Caspian Keyes, Jason Tang, David Chen, Maya Rodriguez, Thomas Schmidt, Sophia Kim, Alex Bernstein  
-**Contact**: [research@nexus-automation.com](mailto:research@nexus-automation.com)  
-**Repository**: [github.com/nexus-automation/](https://github.com/caspiankeyes/Nexus-Automation)
+**Contact**: [research@nexus-automation.com](mailto:recursiveauto@gmail.com)  
+**Repository**: [Nexus](https://github.com/caspiankeyes/Nexus-Automation)
 
 ## Abstract
 
