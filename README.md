@@ -1,9 +1,7 @@
 # Nexus: n8n AI Workflow Automation Hub
 
 <div align="center">
-
-[![GitHub stars](https://img.shields.io/github/stars/nexus-automation/)
-[![GitHub forks](https://img.shields.io/github/forks/nexus-automation/)
+      
 [![n8n Version](https://img.shields.io/badge/n8n-v1.5.0+-00b5a1.svg)](https://github.com/n8n-io/n8n)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
