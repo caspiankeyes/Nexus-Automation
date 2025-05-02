@@ -21,7 +21,6 @@ Nexus is particularly well-suited for organizations seeking to operationalize AI
 <summary><b>Why Nexus?</b></summary>
 
 The emergence of AI capabilities has created opportunities to transform automation, but significant implementation challenges remain:
-
 - Integrating LLMs and AI services into operational workflows requires specialized knowledge
 - Self-hosting AI-enabled automation platforms introduces technical and scaling complexities
 - Maintaining workflow reliability when incorporating probabilistic AI components demands robust error handling
@@ -32,7 +31,6 @@ Nexus systematically addresses these challenges by providing a framework that en
 </details>
 
 ## 🔑 Key Features
-
 | Feature | Description |
 |---------|-------------|
 | **AI-Augmented Workflow Templates** | Production-ready workflow templates leveraging OpenAI, LangChain, HuggingFace and other AI services for common enterprise use cases |
